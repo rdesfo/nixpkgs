@@ -2212,8 +2212,8 @@ let
 
   mscgen = callPackage ../tools/graphics/mscgen { };
 
-  msf = builderDefsPackage (import ../tools/security/metasploit/3.1.nix) {
-    inherit ruby makeWrapper;
+  msf = builderDefsPackage (import ../tools/security/metasploit/default.nix) { 
+    inherit ruby bundlerEnv makeWrapper;
   };
 
   mssys = callPackage ../tools/misc/mssys { };
