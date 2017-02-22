@@ -134,6 +134,41 @@ stdenv.mkDerivation rec {
     done < <(find $out -type f 2>/dev/null)
   '';
 
+  # AppArmor profile
+  security.apparmor.profiles = mkIf apparmor [
+    (pkgs.writeText "apparmor-docker" ''
+      #include <tunables/global>
+      ${pkgs.docker}/bin/docker {
+
+        profile docker-default flags=(attach_disconnected,mediate_deleted) {
+
+          #include <abstractions/base>
+
+          network,
+          capability,
+          file,
+          umount,
+
+          deny @{PROC}/{*,**^[0-9*],sys/kernel/shm*} wkx,
+          deny @{PROC}/sysrq-trigger rwklx,
+          deny @{PROC}/mem rwklx,
+          deny @{PROC}/kmem rwklx,
+          deny @{PROC}/kcore rwklx,
+
+          deny mount,
+
+          deny /sys/[^f]*/** wklx,
+          deny /sys/f[^s]*/** wklx,
+          deny /sys/fs/[^c]*/** wklx,
+          deny /sys/fs/c[^g]*/** wklx,
+          deny /sys/fs/cg[^r]*/** wklx,
+          deny /sys/firmware/efi/efivars/** rwklx,
+          deny /sys/kernel/security/** rwklx,
+        };
+      };
+    '')
+  ];
+
   meta = {
     homepage = http://www.docker.com/;
     description = "An open source project to pack, ship and run any application as a lightweight container";
