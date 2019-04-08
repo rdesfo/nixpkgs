@@ -86,7 +86,7 @@ and install it in your profile with
 ```shell
 nix-env -iA nixpkgs.myEnv
 ```
-The environment is is installed by referring to the attribute, and considering
+The environment is installed by referring to the attribute, and considering
 the `nixpkgs` channel was used.
 
 ##### Environment defined in `/etc/nixos/configuration.nix`
