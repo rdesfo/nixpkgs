@@ -1,12 +1,12 @@
-{stdenv, gcc, glibc, fetchurl, fetchgit, libtool, autoconf, automake, file, gnumake, which, zsh, m4, pkgconfig, perl, gnome, pango, sqlite, libxml2, zlib, gmp, smlnj }:
+{stdenv, gcc, glibc, fetchurl, fetchgit, libtool, autoconf, automake, file, gnumake, which, zsh, m4, pkgconfig, perl, gnome2, pango, sqlite, libxml2, zlib, gmp, smlnj }:
 
 stdenv.mkDerivation {
-  name = "aliceml-1.4-493cd356";
+  name = "aliceml-1.4-7d44dc8e";
 
   src = fetchgit {
     url = "https://github.com/aliceml/aliceml";
-    rev = "493cd3565f0bc3b35790185ec358fb91b7b43037";
-    sha256 = "12fbaf0a474e53f40a71f16bf61c52b7ffe044f4d0993e208e69552df3054d45";
+    rev = "7d44dc8e4097c6f85888bbf4ff86d51fe05b0a08";
+    sha256 = "1xpvia00cpig0i7qvz29sx7xjic6kd472ng722x4rapz8mjnf8bk";
     fetchSubmodules = true;
   };
 
@@ -18,8 +18,8 @@ stdenv.mkDerivation {
   buildInputs = [
     stdenv gcc glibc
     libtool gnumake autoconf automake
-    file which zsh m4 gnome.gtk zlib gmp
-    gnome.libgnomecanvas pango sqlite
+    file which zsh m4 gnome2.gtk zlib gmp
+    gnome2.libgnomecanvas pango sqlite
     libxml2 pkgconfig perl smlnj
   ];
 
@@ -39,7 +39,7 @@ stdenv.mkDerivation {
   '';
 
   buildPhase = ''
-    gmp="${gmp}" zlib="${zlib}" PATH=$PATH:`pwd`/seam-support/install/bin make -C make all PREFIX="$out"
+    gmp="${gmp.dev}" zlib="${zlib.dev}" PATH=$PATH:`pwd`/seam-support/install/bin make -C make all PREFIX="$out"
   '';
 
   meta = {
@@ -52,5 +52,6 @@ stdenv.mkDerivation {
     homepage = http://www.ps.uni-saarland.de/alice/;
     license = stdenv.lib.licenses.mit;
     maintainers = [ stdenv.lib.maintainers.doublec ];
+    broken = true;
   };
 }

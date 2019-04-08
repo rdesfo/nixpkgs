@@ -10,19 +10,22 @@ let default-config = {
 
         virtualisation.memorySize = 128;
       };
-in import ./make-test.nix {
+in import ./make-test.nix ({ pkgs, ...} : {
   name = "networking-proxy";
+  meta = with pkgs.stdenv.lib.maintainers; {
+    maintainers = [  ];
+  };
 
   nodes = {
     # no proxy
     machine =
-      { config, pkgs, ... }:
+      { ... }:
 
       default-config;
 
     # proxy default
     machine2 =
-      { config, pkgs, ... }:
+      { ... }:
 
       default-config // {
         networking.proxy.default = "http://user:pass@host:port";
@@ -30,7 +33,7 @@ in import ./make-test.nix {
 
     # specific proxy options
     machine3 =
-      { config, pkgs, ... }:
+      { ... }:
 
       default-config //
       {
@@ -48,7 +51,7 @@ in import ./make-test.nix {
 
     # mix default + proxy options
     machine4 =
-      { config, pkgs, ... }:
+      { ... }:
 
       default-config // {
         networking.proxy = {
@@ -105,5 +108,4 @@ in import ./make-test.nix {
       $machine4->mustSucceed("su - alice -c 'env | grep -i ftp_proxy | grep 000'");
       $machine4->mustSucceed("su - alice -c 'env | grep -i no_proxy | grep 131415'");
     '';
-
-}
+})

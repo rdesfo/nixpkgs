@@ -1,14 +1,14 @@
 { stdenv, fetchurl, boost, zlib, libevent, openssl, python, pkgconfig, bison
-, flex
+, flex, twisted
 }:
 
 stdenv.mkDerivation rec {
   name = "thrift-${version}";
-  version = "0.9.2";
+  version = "0.12.0";
 
   src = fetchurl {
-    url = "http://archive.apache.org/dist/thrift/${version}/${name}.tar.gz";
-    sha256 = "0w4m6hjmgr1wqac9p5zyfxx2wwqay730qi14fzxba7f46hwhvxff";
+    url = "https://archive.apache.org/dist/thrift/${version}/${name}.tar.gz";
+    sha256 = "0a04v7dgm1qzgii7v0sisnljhxc9xpq2vxkka60scrdp6aahjdn3";
   };
 
   #enableParallelBuilding = true; problems on hydra
@@ -17,15 +17,16 @@ stdenv.mkDerivation rec {
   # pythonFull.buildEnv.override { extraLibs = [ thrift ]; }
   pythonPath = [];
 
+  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    boost zlib libevent openssl python pkgconfig bison flex
+    boost zlib libevent openssl python bison flex twisted
   ];
 
   preConfigure = "export PY_PREFIX=$out";
 
   # TODO: package boost-test, so we can run the test suite. (Currently it fails
   # to find libboost_unit_test_framework.a.)
-  configureFlags = "--enable-tests=no";
+  configureFlags = [ "--enable-tests=no" ];
   doCheck = false;
 
   meta = with stdenv.lib; {

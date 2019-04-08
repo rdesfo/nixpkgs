@@ -18,7 +18,7 @@ let
     </configuration>
   '';
 
-  configDir = pkgs.runCommand "hbase-config-dir" {} ''
+  configDir = pkgs.runCommand "hbase-config-dir" { preferLocalBuild = true; } ''
     mkdir -p $out
     cp ${cfg.package}/conf/* $out/
     rm $out/hbase-site.xml
@@ -44,6 +44,7 @@ in {
       package = mkOption {
         type = types.package;
         default = pkgs.hbase;
+        defaultText = "pkgs.hbase";
         example = literalExample "pkgs.hbase";
         description = ''
           HBase package to use.
@@ -121,13 +122,13 @@ in {
       };
     };
 
-    users.extraUsers.hbase = {
+    users.users.hbase = {
       description = "HBase Server user";
       group = "hbase";
       uid = config.ids.uids.hbase;
     };
 
-    users.extraGroups.hbase.gid = config.ids.gids.hbase;
+    users.groups.hbase.gid = config.ids.gids.hbase;
 
   };
 }

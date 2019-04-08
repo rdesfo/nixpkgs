@@ -1,62 +1,77 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, perl, docbook2x
-, docbook_xml_dtd_45, systemd
-, libapparmor ? null, gnutls ? null, libseccomp ? null, cgmanager ? null
-, libnih ? null, dbus ? null, libcap ? null
+{ stdenv, fetchurl, autoreconfHook, pkgconfig, perl, docbook2x
+, docbook_xml_dtd_45, python3Packages, pam
+
+# Optional Dependencies
+, libapparmor ? null, gnutls ? null, libselinux ? null, libseccomp ? null
+, libcap ? null, systemd ? null
 }:
 
-let
-  enableCgmanager = cgmanager != null && libnih != null && dbus != null;
-in
 with stdenv.lib;
 stdenv.mkDerivation rec {
-  name = "lxc-1.1.1";
+  name = "lxc-${version}";
+  version = "3.1.0";
 
-  src = fetchFromGitHub {
-    owner = "lxc";
-    repo = "lxc";
-    rev = name;
-    sha256 = "04zpznd364862y3dwn97klvwfw9i2b6n1lh4fkci0z74c6z9svql";
+  src = fetchurl {
+    url = "https://linuxcontainers.org/downloads/lxc/lxc-${version}.tar.gz";
+    sha256 = "1igxqgx8q9cp15mcp1y8j564bl85ijw04jcmgb1s5bmfbg1751sd";
   };
 
+  nativeBuildInputs = [
+    autoreconfHook pkgconfig perl docbook2x python3Packages.wrapPython
+  ];
   buildInputs = [
-    autoreconfHook pkgconfig perl docbook2x systemd
-    libapparmor gnutls libseccomp cgmanager libnih dbus libcap
+    pam libapparmor gnutls libselinux libseccomp libcap
+    python3Packages.python python3Packages.setuptools systemd
   ];
 
-  patches = [ ./support-db2x.patch ];
+  patches = [
+    ./support-db2x.patch
+  ];
+
+  postPatch = ''
+    sed -i '/chmod u+s/d' src/lxc/Makefile.am
+  '';
 
   XML_CATALOG_FILES = "${docbook_xml_dtd_45}/xml/dtd/docbook/catalog.xml";
 
   configureFlags = [
+    "--enable-pam"
     "--localstatedir=/var"
     "--sysconfdir=/etc"
-    "--with-rootfs-path=/var/lib/lxc/rootfs"
+    "--disable-api-docs"
+    "--with-init-script=none"
+    "--with-distro=nixos" # just to be sure it is "unknown"
   ] ++ optional (libapparmor != null) "--enable-apparmor"
-    ++ optional (gnutls != null) "--enable-gnutls"
+    ++ optional (libselinux != null) "--enable-selinux"
     ++ optional (libseccomp != null) "--enable-seccomp"
-    ++ optional (enableCgmanager) "--enable-cgmanager"
     ++ optional (libcap != null) "--enable-capabilities"
     ++ [
-    "--enable-doc"
-    "--enable-tests"
+    "--disable-examples"
+    "--enable-python"
+    "--disable-lua"
+    "--enable-bash"
+    (if doCheck then "--enable-tests" else "--disable-tests")
+    "--with-rootfs-path=/var/lib/lxc/rootfs"
   ];
 
-  installFlags = [ "DESTDIR=\${out}" ];
+  doCheck = false;
+
+  installFlags = [
+    "localstatedir=\${TMPDIR}"
+    "sysconfdir=\${out}/etc"
+    "sysconfigdir=\${out}/etc/default"
+    "bashcompdir=\${out}/share/bash-completion/completions"
+    "READMEdir=\${TMPDIR}/var/lib/lxc/rootfs"
+    "LXCPATH=\${TMPDIR}/var/lib/lxc"
+  ];
 
   postInstall = ''
-    mv $out/$out/* $out
-    DIR=$out/$out
-    while rmdir $DIR 2>/dev/null; do
-      DIR="$(dirname "$DIR")"
-    done
-
-    # Remove the unneeded var/lib directories
-    rm -rf $out/var
+    wrapPythonPrograms
   '';
 
   meta = {
-    homepage = "http://lxc.sourceforge.net";
-    description = "userspace tools for Linux Containers, a lightweight virtualization system";
+    homepage = https://linuxcontainers.org/;
+    description = "Userspace tools for Linux Containers, a lightweight virtualization system";
     license = licenses.lgpl21Plus;
 
     longDescription = ''
@@ -68,6 +83,6 @@ stdenv.mkDerivation rec {
     '';
 
     platforms = platforms.linux;
-    maintainers = with maintainers; [ simons wkennington ];
+    maintainers = with maintainers; [ globin fpletz ];
   };
 }

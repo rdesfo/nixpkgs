@@ -2,26 +2,26 @@
 
 stdenv.mkDerivation rec {
   name = "firmware-linux-nonfree-${version}";
-  version = "2015-03-20";
+  version = "2019-03-12";
 
   src = fetchgit {
-    url = "git://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git";
-    rev = "f404336ba808cbd57547196e13367079a23b822c";
-    sha256 = "0avz5vxax2b3s4gafib47vih1lbq78agdmpjcjnnnykw2kschkwa";
+    url = "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git";
+    rev = "20190312";
+    sha256 = "1wk8l75rg7idvsyli29a1fii4xwz3vnm8d65fjw8d3azihdrhbyy";
   };
 
-  preInstall = ''
-    mkdir -p $out
-  '';
-
   installFlags = [ "DESTDIR=$(out)" ];
+
+  # Firmware blobs do not need fixing and should not be modified
+  dontFixup = true;
 
   meta = with stdenv.lib; {
     description = "Binary firmware collection packaged by kernel.org";
     homepage = http://packages.debian.org/sid/firmware-linux-nonfree;
     license = licenses.unfreeRedistributableFirmware;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ wkennington ];
+    maintainers = with maintainers; [ fpletz ];
+    priority = 6; # give precedence to kernel firmware
   };
 
   passthru = { inherit version; };

@@ -1,42 +1,47 @@
-{ stdenv, fetchurl, pkgconfig, which
-, boost, libtorrentRasterbar, qt4
+{ stdenv, fetchFromGitHub, pkgconfig
+, boost, libtorrentRasterbar, qtbase, qttools, qtsvg
 , debugSupport ? false # Debugging
-, guiSupport ? true, dbus_libs ? null # GUI (disable to run headless)
+, guiSupport ? true, dbus ? null # GUI (disable to run headless)
 , webuiSupport ? true # WebUI
 }:
 
-assert guiSupport -> (dbus_libs != null);
-
+assert guiSupport -> (dbus != null);
 with stdenv.lib;
+
 stdenv.mkDerivation rec {
   name = "qbittorrent-${version}";
-  version = "3.1.11";
+  version = "4.1.5";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/qbittorrent/${name}.tar.xz";
-    sha256 = "0qvz8ifk01b9sw9x5yh3b5kmssx5yi026zvgvabdvfaqkvcmw43i";
+  src = fetchFromGitHub {
+    owner = "qbittorrent";
+    repo = "qbittorrent";
+    rev = "release-${version}";
+    sha256 = "09zcygaxfv9g6av0vsvlyzv4v65wvj766xyfx31yz5ig3xan6ak1";
   };
 
-  nativeBuildInputs = [ pkgconfig which ];
+  # NOTE: 2018-05-31: CMake is working but it is not officially supported
+  nativeBuildInputs = [ pkgconfig ];
 
-  buildInputs = [ boost libtorrentRasterbar qt4 ]
-    ++ optional guiSupport dbus_libs;
+  buildInputs = [ boost libtorrentRasterbar qtbase qttools qtsvg ]
+    ++ optional guiSupport dbus; # D(esktop)-Bus depends on GUI support
+
+  # Otherwise qm_gen.pri assumes lrelease-qt5, which does not exist.
+  QMAKE_LRELEASE = "lrelease";
 
   configureFlags = [
-    "--with-libboost-lib=${boost.lib}/lib"
-    "--with-libboost-inc=${boost.dev}/include"
-    (if guiSupport then "" else "--disable-gui")
-    (if webuiSupport then "" else "--disable-webui")
-  ] ++ optional debugSupport "--enable-debug";
+    "--with-boost-libdir=${boost.out}/lib"
+    "--with-boost=${boost.dev}" ]
+    ++ optionals (!guiSupport) [ "--disable-gui" "--enable-systemd" ] # Also place qbittorrent-nox systemd service files
+    ++ optional (!webuiSupport) "--disable-webui"
+    ++ optional debugSupport "--enable-debug";
 
-  # https://github.com/qbittorrent/qBittorrent/issues/1992 
-  enableParallelBuilding = false;
+  enableParallelBuilding = true;
 
   meta = {
-    description = "Free Software alternative to µtorrent";
-    homepage    = http://www.qbittorrent.org/;
+    description = "Featureful free software BitTorrent client";
+    homepage    = https://www.qbittorrent.org/;
     license     = licenses.gpl2;
-    maintainers = with maintainers; [ viric ];
     platforms   = platforms.linux;
+    maintainers = with maintainers; [ Anton-Latukha ];
   };
 }

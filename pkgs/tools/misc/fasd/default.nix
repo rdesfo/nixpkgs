@@ -1,29 +1,24 @@
-{ stdenv, fetchgit, pandoc } :
+{ stdenv, fetchFromGitHub } :
 
-let
-  rev = "287af2b80e0829b08dc6329b4fe8d8e5594d64b0";
-in
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
+  pname = "fasd";
+  name = "${pname}-unstable-2016-08-11";
 
-  name = "fasd-1.0.1";
-
-  src = fetchgit {
-    url = "https://github.com/clvv/fasd.git";
-    inherit rev;
-    sha256 = "0kv9iyfdf916x0gab9fzs4vmsnkaqmb6kh4xna485nqij89xzkgs";
+  src = fetchFromGitHub {
+    owner = "clvv";
+    repo = "${pname}";
+    rev = "90b531a5daaa545c74c7d98974b54cbdb92659fc";
+    sha256 = "0i22qmhq3indpvwbxz7c472rdyp8grag55x7iyjz8gmyn8gxjc11";
   };
-
-  # seems to be needed non-deterministically (timestamps?)
-  nativeBuildInputs = [ pandoc ];
 
   installPhase = ''
     PREFIX=$out make install
   '';
 
   meta = {
-    homepage = "https://github.com/clvv/fasd";
+    homepage = "https://github.com/clvv/${pname}";
     description = "Quick command-line access to files and directories for POSIX shells";
-    license = stdenv.lib.licenses.free; # https://github.com/clvv/fasd/blob/master/LICENSE
+    license = stdenv.lib.licenses.mit;
 
     longDescription = ''
       Fasd is a command-line productivity booster.

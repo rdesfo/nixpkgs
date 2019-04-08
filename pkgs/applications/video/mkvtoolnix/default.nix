@@ -1,49 +1,60 @@
-{ stdenv, fetchurl
-, libmatroska
-, flac
-, libvorbis
-, file
-, boost
-, xdg_utils
-, expat
+{ stdenv, fetchFromGitLab, pkgconfig, autoconf, automake, libiconv, drake
+, ruby, docbook_xsl, file, xdg_utils, gettext, expat, boost, libebml, zlib
+, fmt, libmatroska, libogg, libvorbis, flac, libxslt, cmark
 , withGUI ? true
-, wxGTK
-, zlib
-, ruby
-, gettext
-, pkgconfig
-, curl
+  , qtbase ? null
+  , qtmultimedia ? null
 }:
 
-assert withGUI -> wxGTK != null;
+assert withGUI -> qtbase != null && qtmultimedia != null;
+
+with stdenv.lib;
 
 stdenv.mkDerivation rec {
-  version = "7.8.0";
-  name = "mkvtoolnix-${version}";
+  pname = "mkvtoolnix";
+  version = "32.0.0";
 
-  src = fetchurl {
-    url = "http://www.bunkus.org/videotools/mkvtoolnix/sources/${name}.tar.xz";
-    sha256 = "0m7y9115bkfsm95hv2nq0hnd9w73jymsm071jm798w11vdskm8af";
+  src = fetchFromGitLab {
+    owner  = "mbunkus";
+    repo   = "mkvtoolnix";
+    rev    = "release-${version}";
+    sha256 = "022mmgm0a6qxybjrygisg731sg9m9d8svd0mxr77wfknwa7m09c9";
   };
 
+  nativeBuildInputs = [
+    pkgconfig autoconf automake gettext
+    drake ruby docbook_xsl libxslt
+  ];
+
   buildInputs = [
-    libmatroska flac libvorbis file boost xdg_utils
-    expat zlib ruby gettext pkgconfig curl
-    ] ++ stdenv.lib.optional withGUI wxGTK;
+    expat file xdg_utils boost libebml zlib fmt
+    libmatroska libogg libvorbis flac cmark
+  ] ++ optional  stdenv.isDarwin libiconv
+    ++ optionals withGUI [ qtbase qtmultimedia ];
 
-  configureFlags = "--with-boost-libdir=${boost.lib}/lib";
-  buildPhase = ''
-    ruby ./drake
-  '';
+  preConfigure = "./autogen.sh; patchShebangs .";
+  buildPhase   = "drake -j $NIX_BUILD_CORES";
+  installPhase = "drake install -j $NIX_BUILD_CORES";
 
-  installPhase = ''
-    ruby ./drake install
-  '';
+  configureFlags = [
+    "--enable-magic"
+    "--enable-optimization"
+    "--with-boost-libdir=${boost.out}/lib"
+    "--disable-debug"
+    "--disable-profiling"
+    "--disable-precompiled-headers"
+    "--disable-static-qt"
+    "--with-gettext"
+    "--with-docbook-xsl-root=${docbook_xsl}/share/xml/docbook-xsl"
+    (enableFeature withGUI "qt")
+  ];
 
-  meta = {
+  meta = with stdenv.lib; {
     description = "Cross-platform tools for Matroska";
-    homepage = http://www.bunkus.org/videotools/mkvtoolnix/;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = with stdenv.lib.maintainers; [ fuuzetsu ];
+    homepage    = http://www.bunkus.org/videotools/mkvtoolnix/;
+    license     = licenses.gpl2;
+    maintainers = with maintainers; [ codyopel fuuzetsu rnhmjoj ];
+    platforms   = platforms.linux
+      ++ optionals (!withGUI) platforms.darwin;
   };
 }

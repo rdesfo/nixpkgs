@@ -1,41 +1,39 @@
-{ stdenv, fetchurl, perl }:
+{ stdenv
+, fetchFromGitHub
+
+, cmake
+, ninja
+, perl # Project uses Perl for scripting and testing
+, python
+
+, enableThreading ? true # Threading can be disabled to increase security https://tls.mbed.org/kb/development/thread-safety-and-multi-threading
+}:
 
 stdenv.mkDerivation rec {
-  name = "mbedtls-1.3.10";
+  name = "mbedtls-${version}";
+  version = "2.15.1";
 
-  src = fetchurl {
-    url = "https://polarssl.org/download/${name}-gpl.tgz";
-    sha256 = "0zj0vdmam52hk7c6s3y81bdb4mqawi9fskkcqlgnj8v61j7dhvvl";
+  src = fetchFromGitHub {
+    owner = "ARMmbed";
+    repo = "mbedtls";
+    rev = name;
+    sha256 = "0w6cm2f7d43wp8cx6r5h4icq8zcix1jnvivshypir1rbk1q83gx8";
   };
 
-  nativeBuildInputs = [ perl ];
+  nativeBuildInputs = [ cmake ninja perl python ];
 
-  postPatch = ''
-    patchShebangs .
+  postConfigure = stdenv.lib.optionals enableThreading ''
+    perl scripts/config.pl set MBEDTLS_THREADING_C    # Threading abstraction layer
+    perl scripts/config.pl set MBEDTLS_THREADING_PTHREAD    # POSIX thread wrapper layer for the threading layer.
   '';
 
-  makeFlags = [
-    "SHARED=1"
-  ];
-
-  installFlags = [
-    "DESTDIR=\${out}"
-  ];
-
-  postInstall = ''
-    rm $out/lib/lib{mbedtls.so.8,polarssl.{a,so}}
-    ln -s libmbedtls.so $out/lib/libmbedtls.so.8
-    ln -s libmbedtls.so $out/lib/libpolarssl.so
-    ln -s libmbedtls.a $out/lib/libpolarssl.a
-  '';
-
-  doCheck = true;
+  cmakeFlags = [ "-DUSE_SHARED_MBEDTLS_LIBRARY=on" ];
 
   meta = with stdenv.lib; {
-    homepage = https://polarssl.org/;
-    description = "Portable cryptographic and SSL/TLS library, aka polarssl";
-    license = licenses.gpl3;
+    homepage = https://tls.mbed.org/;
+    description = "Portable cryptographic and TLS library, formerly known as PolarSSL";
+    license = licenses.asl20;
     platforms = platforms.all;
-    maintainers = with maintainers; [ wkennington ];
+    maintainers = with maintainers; [ fpletz ];
   };
 }

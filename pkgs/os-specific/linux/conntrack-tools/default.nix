@@ -1,18 +1,20 @@
 { fetchurl, stdenv, flex, bison, pkgconfig, libmnl, libnfnetlink
 , libnetfilter_conntrack, libnetfilter_queue, libnetfilter_cttimeout
-, libnetfilter_cthelper }:
+, libnetfilter_cthelper, systemd }:
 
 stdenv.mkDerivation rec {
   name = "conntrack-tools-${version}";
-  version = "1.4.2";
+  version = "1.4.5";
 
   src = fetchurl {
-    url = "http://www.netfilter.org/projects/conntrack-tools/files/${name}.tar.bz2";
-    sha256 = "e5c423dc077f9ca8767eaa6cf40446943905711c6a8fe27f9cc1977d4d6aa11e";
+    url = "https://www.netfilter.org/projects/conntrack-tools/files/${name}.tar.bz2";
+    sha256 = "0qm4m78hr6a4fbmnkw5nyjm1pzzhydzx0nz7f96iv1c4fsfdkiin";
   };
 
-  buildInputs = [ libmnl libnfnetlink libnetfilter_conntrack libnetfilter_queue
-    libnetfilter_cttimeout libnetfilter_cthelper ];
+  buildInputs = [
+    libmnl libnfnetlink libnetfilter_conntrack libnetfilter_queue
+    libnetfilter_cttimeout libnetfilter_cthelper systemd
+  ];
   nativeBuildInputs = [ flex bison pkgconfig ];
 
   meta = with stdenv.lib; {
@@ -20,5 +22,6 @@ stdenv.mkDerivation rec {
     description = "Connection tracking userspace tools";
     platforms = platforms.linux;
     license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ fpletz ];
   };
 }

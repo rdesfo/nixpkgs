@@ -1,26 +1,20 @@
 { stdenv, fetchurl }:
 
 stdenv.mkDerivation {
-  name = "proj-4.8.0";
+  name = "proj-5.2.0";
 
   src = fetchurl {
-    url = http://download.osgeo.org/proj/proj-4.8.0.tar.gz;
-    sha256 = "1dfim63ks298204lv2z0v16njz6fs7bf0m4icy09i3ffzvqdpcid";
+    url = https://download.osgeo.org/proj/proj-5.2.0.tar.gz;
+    sha256 = "0q3ydh2j8qhwlxmnac72pg69rw2znbi5b6k5wama8qmwzycr94gg";
   };
 
-  postConfigure = ''
-    patch src/Makefile <<EOF
-    272c272
-    < include_HEADERS = proj_api.h org_proj4_Projections.h
-    ---
-    > include_HEADERS = proj_api.h org_proj4_Projections.h projects.h
-    EOF
-  '';
+  doCheck = stdenv.is64bit;
 
   meta = with stdenv.lib; {
     description = "Cartographic Projections Library";
     homepage = http://trac.osgeo.org/proj/;
     license = licenses.mit;
-    platforms = platforms.linux;
+    platforms = platforms.linux ++ platforms.darwin;
+    maintainers = with maintainers; [ vbgl ];
   };
 }

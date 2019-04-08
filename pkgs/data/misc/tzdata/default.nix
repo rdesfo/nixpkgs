@@ -1,39 +1,72 @@
-{ stdenv, fetchurl }:
-
-let version = "2015c"; in
+{ stdenv, fetchurl, buildPackages }:
 
 stdenv.mkDerivation rec {
   name = "tzdata-${version}";
+  version = "2019a";
 
   srcs =
     [ (fetchurl {
-        url = "http://www.iana.org/time-zones/repository/releases/tzdata${version}.tar.gz";
-        sha256 = "0nin48g5dmkfgckp25bngxchn3sw3yyjss5sq7gs5xspbxgsq3w6";
+        url = "https://data.iana.org/time-zones/releases/tzdata${version}.tar.gz";
+        sha256 = "0wlpqm4asvi0waaz24xj20iq40gqfypmb4nldjhkfgm09bgnsdlh";
       })
       (fetchurl {
-        url = "http://www.iana.org/time-zones/repository/releases/tzcode${version}.tar.gz";
-        sha256 = "0bplibiy70dvlrhwqzkzxgmg81j6d2kklvjgi2f1g2zz1nkb3vkz";
+        url = "https://data.iana.org/time-zones/releases/tzcode${version}.tar.gz";
+        sha256 = "1x9z8fpgnhzlsnps0hamb54ymaskjab7ys9m4i4gpk9hpiig2fc7";
       })
     ];
 
   sourceRoot = ".";
-  outputs = [ "out" "lib" ];
 
-  makeFlags = "TOPDIR=$(out) TZDIR=$(out)/share/zoneinfo ETCDIR=$(TMPDIR)/etc LIBDIR=$(lib)/lib MANDIR=$(TMPDIR)/man AWK=awk CFLAGS=-DHAVE_LINK=0";
+  outputs = [ "out" "bin" "man" "dev" ];
+  propagatedBuildOutputs = [];
+
+  makeFlags = [
+    "TOPDIR=$(out)"
+    "TZDIR=$(out)/share/zoneinfo"
+    "BINDIR=$(bin)/bin"
+    "ZICDIR=$(bin)/bin"
+    "ETCDIR=$(TMPDIR)/etc"
+    "TZDEFAULT=$(TMPDIR)/etc"
+    "LIBDIR=$(dev)/lib"
+    "MANDIR=$(man)/share/man"
+    "AWK=awk"
+    "CFLAGS=-DHAVE_LINK=0"
+    "cc=${stdenv.cc.targetPrefix}cc"
+    "AR=${stdenv.cc.targetPrefix}ar"
+  ];
+
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+
+  doCheck = false; # needs more tools
+
+  installFlags = [ "ZIC=./zic-native" ];
+
+  preInstall = ''
+     mv zic.o zic.o.orig
+     mv zic zic.orig
+     make $makeFlags cc=cc AR=ar zic
+     mv zic zic-native
+     mv zic.o.orig zic.o
+     mv zic.orig zic
+  '';
 
   postInstall =
     ''
       rm $out/share/zoneinfo-posix
-      ln -s . $out/share/zoneinfo/posix
+      mkdir $out/share/zoneinfo/posix
+      ( cd $out/share/zoneinfo/posix; ln -s ../* .; rm posix )
       mv $out/share/zoneinfo-leaps $out/share/zoneinfo/right
 
-      mkdir -p "$lib/include"
-      cp tzfile.h "$lib/include/tzfile.h"
+      mkdir -p "$dev/include"
+      cp tzfile.h "$dev/include/tzfile.h"
     '';
 
-  meta = {
+  setupHook = ./tzdata-setup-hook.sh;
+
+  meta = with stdenv.lib; {
     homepage = http://www.iana.org/time-zones;
     description = "Database of current and historical time zones";
-    platforms = stdenv.lib.platforms.all;
+    platforms = platforms.all;
+    maintainers = with maintainers; [ fpletz ];
   };
 }

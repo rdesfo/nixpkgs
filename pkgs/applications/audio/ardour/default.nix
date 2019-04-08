@@ -1,9 +1,11 @@
-{ stdenv, fetchgit, alsaLib, aubio, boost, cairomm, curl, fftw
-, fftwSinglePrec, flac, glibc, glibmm, gtk, gtkmm, jack2
+{ stdenv, fetchgit, alsaLib, aubio, boost, cairomm, curl, doxygen
+, fftwSinglePrec, flac, glibc, glibmm, graphviz, gtkmm2, libjack2
 , libgnomecanvas, libgnomecanvasmm, liblo, libmad, libogg, librdf
 , librdf_raptor, librdf_rasqal, libsamplerate, libsigcxx, libsndfile
-, libusb, libuuid, libxml2, libxslt, lilv, lv2, makeWrapper, pango
-, perl, pkgconfig, python, serd, sord, sratom, suil }:
+, libusb, libuuid, libxml2, libxslt, lilv, lv2, makeWrapper
+, perl, pkgconfig, python2, rubberband, serd, sord, sratom
+, taglib, vampSDK, dbus, fftw, pango, suil, libarchive
+, wafHook }:
 
 let
 
@@ -15,11 +17,7 @@ let
   # "git describe" when _not_ on an annotated tag(!): MAJOR.MINOR-REV-HASH.
 
   # Version to build.
-  tag = "3.5.403";
-
-  # Version info that is built into the binary. Keep in sync with 'tag'. The
-  # last 8 digits is a (fake) commit id.
-  revision = "3.5-403-00000000";
+  tag = "5.12";
 
 in
 
@@ -27,47 +25,46 @@ stdenv.mkDerivation rec {
   name = "ardour-${tag}";
 
   src = fetchgit {
-    url = git://git.ardour.org/ardour/ardour.git;
-    rev = "refs/tags/${tag}";
-    sha256 = "0k1z8sbjf88dqn12kf9cykrqj38vkr879n2g6b4adk6cghn8wz3x";
+    url = "git://git.ardour.org/ardour/ardour.git";
+    rev = "ae0dcdc0c5d13483271065c360e378202d20170a";
+    sha256 = "0mla5lm51ryikc2rrk53max2m7a5ds6i1ai921l2h95wrha45nkr";
   };
 
-  buildInputs = 
-    [ alsaLib aubio boost cairomm curl fftw fftwSinglePrec flac glibc
-      glibmm gtk gtkmm jack2 libgnomecanvas libgnomecanvasmm liblo
+  nativeBuildInputs = [ wafHook ];
+  buildInputs =
+    [ alsaLib aubio boost cairomm curl doxygen dbus fftw fftwSinglePrec flac
+      glibmm graphviz gtkmm2 libjack2 libgnomecanvas libgnomecanvasmm liblo
       libmad libogg librdf librdf_raptor librdf_rasqal libsamplerate
       libsigcxx libsndfile libusb libuuid libxml2 libxslt lilv lv2
-      makeWrapper pango perl pkgconfig python serd sord sratom suil
+      makeWrapper pango perl pkgconfig python2 rubberband serd sord
+      sratom suil taglib vampSDK libarchive
     ];
 
+  # ardour's wscript has a "tarball" target but that required the git revision
+  # be available. Since this is an unzipped tarball fetched from github we
+  # have to do that ourself.
   patchPhase = ''
-    printf '#include "libs/ardour/ardour/revision.h"\nnamespace ARDOUR { const char* revision = \"${revision}\"; }\n' > libs/ardour/revision.cc
-    sed 's|/usr/include/libintl.h|${glibc}/include/libintl.h|' -i wscript
-    sed -e 's|^#!/usr/bin/perl.*$|#!${perl}/bin/perl|g' -i tools/fmt-bindings
-    sed -e 's|^#!/usr/bin/env.*$|#!${perl}/bin/perl|g' -i tools/*.pl
+    printf '#include "libs/ardour/ardour/revision.h"\nnamespace ARDOUR { const char* revision = \"${tag}-${builtins.substring 0 8 src.rev}\"; }\n' > libs/ardour/revision.cc
+    sed 's|/usr/include/libintl.h|${glibc.dev}/include/libintl.h|' -i wscript
+    patchShebangs ./tools/
   '';
 
-  configurePhase = "python waf configure --optimize --prefix=$out";
+  configureFlags = [
+    "--optimize"
+    "--docs"
+    "--with-backends=jack,alsa,dummy"
+  ];
 
-  buildPhase = "python waf";
-
-  # For the custom ardour clearlooks gtk-engine to work, it must be
-  # moved to a directory called "engines" and added to GTK_PATH
-  installPhase = ''
-    python waf install
-    mkdir -pv $out/gtk2/engines
-    cp build/libs/clearlooks-newer/libclearlooks.so $out/gtk2/engines/
-    wrapProgram $out/bin/ardour3 --prefix GTK_PATH : $out/gtk2
-
+  postInstall = ''
     # Install desktop file
     mkdir -p "$out/share/applications"
     cat > "$out/share/applications/ardour.desktop" << EOF
     [Desktop Entry]
-    Name=Ardour 3
+    Name=Ardour 5
     GenericName=Digital Audio Workstation
     Comment=Multitrack harddisk recorder
-    Exec=$out/bin/ardour3
-    Icon=$out/share/ardour3/icons/ardour_icon_256px.png
+    Exec=$out/bin/ardour5
+    Icon=$out/share/ardour5/resources/Ardour-icon_256px.png
     Terminal=false
     Type=Application
     X-MultipleArgs=false
@@ -78,11 +75,17 @@ stdenv.mkDerivation rec {
   meta = with stdenv.lib; {
     description = "Multi-track hard disk recording software";
     longDescription = ''
-      Also read "The importance of Paying Something" on their homepage, please!
+      Ardour is a digital audio workstation (DAW), You can use it to
+      record, edit and mix multi-track audio and midi. Produce your
+      own CDs. Mix video soundtracks. Experiment with new ideas about
+      music and sound.
+
+      Please consider supporting the ardour project financially:
+      https://community.ardour.org/node/8288
     '';
     homepage = http://ardour.org/;
     license = licenses.gpl2;
     platforms = platforms.linux;
-    maintainers = [ maintainers.goibhniu ];
+    maintainers = [ maintainers.goibhniu maintainers.fps ];
   };
 }

@@ -1,38 +1,40 @@
-{ stdenv, fetchurl, python, rcs, git }:
+{ stdenv, fetchurl, python, rcs, git, makeWrapper }:
 
 stdenv.mkDerivation rec {
-  name = "src-0.13";
+  name = "src-${version}";
+  version = "1.24";
 
   src = fetchurl {
     url = "http://www.catb.org/~esr/src/${name}.tar.gz";
-    sha256 = "03x0slgi6bnzgfn7f9qbl6jma0pj7357kwdh832l3v8zafk41p51";
+    sha256 = "0n9j2mywbm8c7mc5b3m7dvn6gff88wwwaygk4y1jivpg1f6s3k3l";
   };
 
-  buildInputs = [ python ];
+  buildInputs = [ python rcs git makeWrapper ];
 
-  patches = [ ./path.patch ];
-
-  postPatch = ''
-    sed -i \
-      -e 's|@python@|${python}|' \
-      -e 's|@rcs@|${rcs}|' \
-      -e 's|@git@|${git}|' \
-      src srctest
+  preConfigure = ''
+    patchShebangs .
   '';
 
   makeFlags = [ "prefix=$(out)" ];
 
-  doCheck = true;
+  postInstall = ''
+    wrapProgram $out/bin/src \
+      --suffix PATH ":" "${rcs}/bin"
+  '';
 
-  meta = {
+  meta = with stdenv.lib; {
     description = "Simple single-file revision control";
-
-    homepage = http://www.catb.org/~esr/src/;
-
-    license = [ stdenv.lib.licenses.bsd3 ];
-
-    maintainers = [ stdenv.lib.maintainers.shlevy ];
-
-    platforms = stdenv.lib.platforms.all;
+    longDescription = ''
+      SRC, acronym of Simple Revision Control, is RCS/SCCS reloaded with a
+      modern UI, designed to manage single-file solo projects kept more than one
+      to a directory. Use it for FAQs, ~/bin directories, config files, and the
+      like. Features integer sequential revision numbers, a command set that
+      will seem familiar to Subversion/Git/hg users, and no binary blobs
+      anywhere.
+    '';
+    homepage = http://www.catb.org/esr/src/;
+    license = licenses.bsd3;
+    platforms = platforms.all;
+    maintainers = with maintainers; [ calvertvl AndersonTorres ];
   };
 }

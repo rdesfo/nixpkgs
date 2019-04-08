@@ -1,15 +1,23 @@
-{ stdenv, fetchurl, liblapack, readline, gettext, ncurses }:
+{ stdenv, fetchurl, readline, gettext, ncurses }:
 
 stdenv.mkDerivation rec {
   name = "gnu-apl-${version}";
-  version = "1.5";
+  version = "1.7";
 
   src = fetchurl {
     url = "mirror://gnu/apl/apl-${version}.tar.gz";
-    sha256 = "0h4diq3wfbdwxp5nm0z4b0p1zq13lwip0y7v28r9v0mbbk8xsfh1";
+    sha256 = "07xq8ddlmz8psvsmwr23gar108ri0lwmw0n6kpxcv8ypas1f5xlg";
   };
 
-  buildInputs = [ liblapack readline gettext ncurses ];
+  buildInputs = [ readline gettext ncurses ];
+
+  # Needed with GCC 7
+  NIX_CFLAGS_COMPILE = stdenv.lib.optionalString stdenv.cc.isGNU "-Wno-error=int-in-bool-context"
+    + stdenv.lib.optionalString stdenv.cc.isClang "-Wno-error=null-dereference";
+
+  patchPhase = stdenv.lib.optionalString stdenv.isDarwin ''
+    substituteInPlace src/LApack.cc --replace "malloc.h" "malloc/malloc.h"
+  '';
 
   postInstall = ''
     cp -r support-files/ $out/share/doc/
@@ -18,10 +26,10 @@ stdenv.mkDerivation rec {
 
   meta = with stdenv.lib; {
     description = "Free interpreter for the APL programming language";
-    homepage    = http://www.gnu.org/software/apl/;
+    homepage    = https://www.gnu.org/software/apl/;
     license     = licenses.gpl3Plus;
     maintainers = [ maintainers.kovirobi ];
-    platforms   = stdenv.lib.platforms.linux;
+    platforms   = with platforms; linux ++ darwin;
     inherit version;
 
     longDescription = ''

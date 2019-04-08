@@ -1,33 +1,40 @@
-{ stdenv, fetchurl, makeWrapper, cmake, qt4, pkgconfig, alsaLib, portaudio, jack2, libsndfile}:
+{ stdenv, lib, fetchzip, cmake, pkgconfig
+, alsaLib, freetype, libjack2, lame, libogg, libpulseaudio, libsndfile, libvorbis
+, portaudio, portmidi, qtbase, qtdeclarative, qtscript, qtsvg, qttools
+, qtwebengine, qtxmlpatterns
+}:
 
 stdenv.mkDerivation rec {
-  name = "musescore-1.3";
+  name = "musescore-${version}";
+  version = "3.0.5";
 
-  src = fetchurl {
-    url = "http://ftp.osuosl.org/pub/musescore/releases/MuseScore-1.3/mscore-1.3.tar.bz2";
-    sha256 = "a0b60cc892ac0266c58fc6392be72c0a21c3aa7fd0b6e4f1dddad1c8b36be683";
+  src = fetchzip {
+    url = "https://download.musescore.com/releases/MuseScore-${version}/MuseScore-${version}.zip";
+    sha256 = "1pbf6v0l3nixxr8k5igwhj09wnqvw92av6q6yjrbb3kyjh5br2d8";
+    stripRoot = false;
   };
 
-  buildInputs = [ makeWrapper cmake qt4 pkgconfig alsaLib portaudio jack2 libsndfile ];
+  patches = [
+    ./remove_qtwebengine_install_hack.patch
+  ];
 
-  configurePhase = ''
-    cd mscore;
-    mkdir build;
-    cd build;
-    cmake -DCMAKE_INSTALL_PREFIX=$out -DQT_PLUGINS_DIR=$out/lib/qt4/plugins -DCMAKE_BUILD_TYPE=Release ..'';
+  cmakeFlags = [
+  ] ++ lib.optional (lib.versionAtLeast freetype.version "2.5.2") "-DUSE_SYSTEM_FREETYPE=ON";
 
-  preBuild = ''make lrelease;'';
+  nativeBuildInputs = [ cmake pkgconfig ];
 
-  postInstall = ''
-    wrapProgram $out/bin/mscore --prefix QT_PLUGIN_PATH : $out/lib/qt4/plugins
-  '';
+  buildInputs = [
+    alsaLib libjack2 freetype lame libogg libpulseaudio libsndfile libvorbis
+    portaudio portmidi # tesseract
+    qtbase qtdeclarative qtscript qtsvg qttools qtwebengine qtxmlpatterns
+  ];
 
   meta = with stdenv.lib; {
-    description = "Qt-based score editor";
-    homepage = http://musescore.org/;
+    description = "Music notation and composition software";
+    homepage = https://musescore.org/;
     license = licenses.gpl2;
+    maintainers = with maintainers; [ vandenoever ];
     platforms = platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.vandenoever ];
     repositories.git = https://github.com/musescore/MuseScore;
   };
 }

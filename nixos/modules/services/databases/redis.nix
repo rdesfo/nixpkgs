@@ -46,6 +46,7 @@ in
       package = mkOption {
         type = types.package;
         default = pkgs.redis;
+        defaultText = "pkgs.redis";
         description = "Which Redis derivation to use.";
       };
 
@@ -67,6 +68,22 @@ in
         description = "The port for Redis to listen to.";
       };
 
+      vmOverCommit = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Set vm.overcommit_memory to 1 (Suggested for Background Saving: http://redis.io/topics/faq)
+        '';
+      };
+
+      openFirewall = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Whether to open ports in the firewall for the server.
+        '';
+      };
+
       bind = mkOption {
         type = with types; nullOr str;
         default = null; # All interfaces
@@ -78,7 +95,7 @@ in
         type = with types; nullOr path;
         default = null;
         description = "The path to the socket to bind to.";
-        example = "/var/run/redis.sock";
+        example = "/run/redis.sock";
       };
 
       logLevel = mkOption {
@@ -192,9 +209,16 @@ in
 
   config = mkIf config.services.redis.enable {
 
-    users.extraUsers.redis =
+    boot.kernel.sysctl = mkIf cfg.vmOverCommit {
+      "vm.overcommit_memory" = "1";
+    };
+
+    networking.firewall = mkIf cfg.openFirewall {
+      allowedTCPPorts = [ cfg.port ];
+    };
+
+    users.users.redis =
       { name = cfg.user;
-        uid = config.ids.uids.redis;
         description = "Redis database user";
       };
 
@@ -209,9 +233,8 @@ in
         serviceConfig.Type = "oneshot";
 
         script = ''
-          if ! test -e ${cfg.dbpath}; then
-              install -d -m0700 -o ${cfg.user} ${cfg.dbpath}
-          fi
+          install -d -m0700 -o ${cfg.user} ${cfg.dbpath}
+          chown -R ${cfg.user} ${cfg.dbpath}
         '';
       };
 

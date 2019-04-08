@@ -1,20 +1,21 @@
-{ fetchurl, stdenv, gmp, mpfr }:
+{ stdenv, fetchurl
+, gmp, mpfr
+}:
+
 let
-  version = "1.0.1";
+  version = "1.1.0";
 in
 stdenv.mkDerivation rec {
   name = "libmpc-${version}"; # to avoid clash with the MPD client
 
   src = fetchurl {
-    url = "http://www.multiprecision.org/mpc/download/mpc-${version}.tar.gz";
-    sha1 = "vxg0rkyn4cs40wr2cp6bbcyr1nnijzlc";
+    url = "mirror://gnu/mpc/mpc-${version}.tar.gz";
+    sha256 = "0biwnhjm3rx3hc0rfpvyniky4lpzsvdcwhmcn7f0h4iw2hwcb1b9";
   };
 
   buildInputs = [ gmp mpfr ];
 
-  CFLAGS = "-I${gmp}/include";
-
-  doCheck = true;
+  doCheck = true; # not cross;
 
   meta = {
     description = "Library for multiprecision complex arithmetic with exact rounding";

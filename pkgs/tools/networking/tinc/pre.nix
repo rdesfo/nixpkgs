@@ -1,15 +1,35 @@
-{ stdenv, fetchgit, autoreconfHook, texinfo, ncurses, readline, zlib, lzo, openssl }:
+{ stdenv, fetchgit, fetchpatch, autoreconfHook, texinfo, ncurses, readline, zlib, lzo, openssl }:
 
 stdenv.mkDerivation rec {
-  name = "tinc-1.1pre-2015-03-14";
+  name = "tinc-${version}";
+  version = "1.1pre17";
 
   src = fetchgit {
+    rev = "refs/tags/release-${version}";
     url = "git://tinc-vpn.org/tinc";
-    rev = "6568cffd52d4803effaf52a9bb9c98d69cf7922a";
-    sha256 = "1nh0yjv6gf8p5in67kdq68xlai69f34ks0j610i8d8nw2mfm9x4a";
+    sha256 = "12abmx9qglchgn94a1qwgzldf2kaz77p8705ylpggzyncxv6bw2q";
   };
 
-  buildInputs = [ autoreconfHook texinfo ncurses readline zlib lzo openssl ];
+  outputs = [ "out" "man" "info" ];
+
+  patches = [
+    (fetchpatch {
+      name = "tinc-openssl-1.0.2r.patch";
+      url = "http://git.tinc-vpn.org/git/browse?p=tinc;a=patch;h=2b0aeec02d64bb4724da9ff1dbc19b7d35d7c904";
+      sha256 = "0kidzlmgl0cin4g54ygcxa0jbq9vwlk3dyq5f65nkjd8yvayfzi8";
+    })
+  ];
+
+  nativeBuildInputs = [ autoreconfHook texinfo ];
+  buildInputs = [ ncurses readline zlib lzo openssl ];
+
+  # needed so the build doesn't need to run git to find out the version.
+  prePatch = ''
+    substituteInPlace configure.ac --replace UNKNOWN ${version}
+    echo "${version}" > configure-version
+    echo "https://tinc-vpn.org/git/browse?p=tinc;a=log;h=refs/tags/release-${version}" > ChangeLog
+    sed -i '/AC_INIT/s/m4_esyscmd_s.*/${version})/' configure.ac
+  '';
 
   configureFlags = [
     "--sysconfdir=/etc"
@@ -27,6 +47,6 @@ stdenv.mkDerivation rec {
     homepage="http://www.tinc-vpn.org/";
     license = licenses.gpl2Plus;
     platforms = platforms.unix;
-    maintainers = with maintainers; [ wkennington ];
+    maintainers = with maintainers; [ fpletz lassulus ];
   };
 }

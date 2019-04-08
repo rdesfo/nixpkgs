@@ -1,5 +1,5 @@
 { stdenv, fetchurl, pkgconfig, intltool, exo, gtk, libxfce4util, libxfce4ui
-, xfconf, udev, libnotify }:
+, xfconf, udev, libgudev, libnotify, hicolor-icon-theme }:
 
 stdenv.mkDerivation rec {
   p_name  = "thunar-volman";
@@ -14,10 +14,9 @@ stdenv.mkDerivation rec {
 
 
   buildInputs =
-    [ pkgconfig intltool exo gtk udev libxfce4ui libxfce4util
-      xfconf libnotify
+    [ pkgconfig intltool exo gtk udev libgudev libxfce4ui libxfce4util
+      xfconf libnotify hicolor-icon-theme
     ];
-  preFixup = "rm $out/share/icons/hicolor/icon-theme.cache";
 
   enableParallelBuilding = true;
 

@@ -1,19 +1,29 @@
-{ stdenv, fetchurl, ncurses, asciidoc, xmlto, docbook_xsl, docbook_xml_dtd_45
-, readline, makeWrapper, git
+{ stdenv, fetchFromGitHub, ncurses, asciidoc, xmlto, docbook_xsl, docbook_xml_dtd_45
+, readline, makeWrapper, git, libiconv, autoreconfHook, findXMLCatalogs, pkgconfig
 }:
 
 stdenv.mkDerivation rec {
-  name = "tig-2.1";
+  pname = "tig";
+  version = "2.4.1";
+  name = "${pname}-${version}";
 
-  src = fetchurl {
-    url = "http://jonas.nitro.dk/tig/releases/${name}.tar.gz";
-    sha256 = "1c1w6w39a1dwx4whrg0ga1mhrlz095hz875z7ajn6xgmhkv8fqih";
+  src = fetchFromGitHub {
+    owner = "jonas";
+    repo = pname;
+    rev = name;
+    sha256 = "0i26yfn2vjgsg1kdvhhv55jwzds7ih7cnad1xqvilqm83zh47ksd";
   };
 
-  buildInputs = [ ncurses asciidoc xmlto docbook_xsl readline git makeWrapper ];
+  nativeBuildInputs = [ makeWrapper autoreconfHook asciidoc xmlto docbook_xsl docbook_xml_dtd_45 findXMLCatalogs pkgconfig ];
 
-  preConfigure = ''
-    export XML_CATALOG_FILES='${docbook_xsl}/xml/xsl/docbook/catalog.xml ${docbook_xml_dtd_45}/xml/dtd/docbook/catalog.xml'
+  autoreconfFlags = "-I tools -v";
+
+  buildInputs = [ ncurses readline git ]
+    ++ stdenv.lib.optionals stdenv.isDarwin [ libiconv ];
+
+  # those files are inherently impure, we'll handle the corresponding dependencies.
+  postPatch = ''
+      rm -f contrib/config.make-*
   '';
 
   enableParallelBuilding = true;
@@ -21,17 +31,22 @@ stdenv.mkDerivation rec {
   installPhase = ''
     make install
     make install-doc
-    mkdir -p $out/etc/bash_completion.d/
-    cp contrib/tig-completion.bash $out/etc/bash_completion.d/
+
+    substituteInPlace contrib/tig-completion.zsh \
+      --replace 'e=$(dirname ''${funcsourcetrace[1]%:*})/tig-completion.bash' "e=$out/etc/bash_completion.d/tig-completion.bash"
+
+    install -D contrib/tig-completion.bash $out/etc/bash_completion.d/tig-completion.bash
+    install -D contrib/tig-completion.zsh $out/share/zsh/site-functions/_tig
+    cp contrib/vim.tigrc $out/etc/
 
     wrapProgram $out/bin/tig \
       --prefix PATH ':' "${git}/bin"
   '';
 
   meta = with stdenv.lib; {
-    homepage = "http://jonas.nitro.dk/tig/";
+    homepage = https://jonas.github.io/tig/;
     description = "Text-mode interface for git";
-    maintainers = with maintainers; [ garbas bjornfor iElectric ];
+    maintainers = with maintainers; [ garbas bjornfor domenkozar qknight ];
     license = licenses.gpl2;
     platforms = platforms.unix;
   };

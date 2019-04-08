@@ -1,22 +1,24 @@
-{ stdenv, fetchurl, pkgconfig, glib }:
+{ stdenv, fetchurl, pkgconfig, glib, which }:
 
 stdenv.mkDerivation rec {
-  name = "nbd-3.10";
+  name = "nbd-3.19";
 
   src = fetchurl {
     url = "mirror://sourceforge/nbd/${name}.tar.xz";
-    sha256 = "1kj772zv6s3rjmvr0gi3yhagzlq2nmv5n5gfhrjphv5bcxx3mibg";
+    sha256 = "1446rdg490fxd8mg5gvrf4nddbw1w7lf2daxy9cpc19yy4968iml";
   };
 
-  buildInputs = [ pkgconfig glib ] ++ stdenv.lib.optional (stdenv ? glibc) stdenv.glibc.kernelHeaders;
+  buildInputs = [ glib ]
+    ++ stdenv.lib.optional (stdenv ? glibc) stdenv.glibc.linuxHeaders;
+
+  nativeBuildInputs = [ pkgconfig which ];
 
   postInstall = ''
     mkdir -p "$out/share/doc/${name}"
     cp README.md "$out/share/doc/${name}/"
   '';
 
-  # The test suite doesn't succeed in chroot builds.
-  doCheck = false;
+  doCheck = true;
 
   # Glib calls `clock_gettime', which is in librt. Linking that library
   # here ensures that a proper rpath is added to the executable so that
@@ -24,10 +26,10 @@ stdenv.mkDerivation rec {
   NIX_LDFLAGS = stdenv.lib.optionalString stdenv.isLinux "-lrt -lpthread";
 
   meta = {
-    homepage = "http://nbd.sourceforge.net";
-    description = "map arbitrary files as block devices over the network";
+    homepage = http://nbd.sourceforge.net;
+    description = "Map arbitrary files as block devices over the network";
     license = stdenv.lib.licenses.gpl2;
-    maintainers = [ stdenv.lib.maintainers.simons ];
-    platforms = stdenv.lib.platforms.unix;
+    maintainers = [ stdenv.lib.maintainers.peti ];
+    platforms = stdenv.lib.platforms.linux;
   };
 }

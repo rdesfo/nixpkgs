@@ -1,17 +1,16 @@
 { stdenv, fetchurl, pkgconfig, yasm
-, freetype ? null
-, fribidi ? null
+, freetype, fribidi
 , encaSupport ? true, enca ? null # enca support
 , fontconfigSupport ? true, fontconfig ? null # fontconfig support
 , harfbuzzSupport ? true, harfbuzz ? null # harfbuzz support
 , rasterizerSupport ? false # Internal rasterizer
 , largeTilesSupport ? false # Use larger tiles in the rasterizer
+, libiconv
 }:
 
-assert ((freetype != null) && (fribidi != null));
-assert encaSupport -> (enca != null);
-assert fontconfigSupport -> (fontconfig != null);
-assert harfbuzzSupport -> (harfbuzz != null);
+assert encaSupport -> enca != null;
+assert fontconfigSupport -> fontconfig != null;
+assert harfbuzzSupport -> harfbuzz != null;
 
 let
   mkFlag = optSet: flag: if optSet then "--enable-${flag}" else "--disable-${flag}";
@@ -20,11 +19,11 @@ in
 with stdenv.lib;
 stdenv.mkDerivation rec {
   name = "libass-${version}";
-  version = "0.12.1";
+  version = "0.14.0";
 
   src = fetchurl {
     url = "https://github.com/libass/libass/releases/download/${version}/${name}.tar.xz";
-    sha256 = "1mwj2nk9g6cq6f8m1hf0ijg1299rghhy9naahqq43sc2whblb1l7";
+    sha256 = "18iqznl4mabhj9ywfsz4kwvbsplcv1jjxq50nxssvbj8my1267w8";
   };
 
   configureFlags = [
@@ -40,14 +39,15 @@ stdenv.mkDerivation rec {
   buildInputs = [ freetype fribidi ]
     ++ optional encaSupport enca
     ++ optional fontconfigSupport fontconfig
-    ++ optional harfbuzzSupport harfbuzz;
+    ++ optional harfbuzzSupport harfbuzz
+    ++ optional stdenv.isDarwin libiconv;
 
   meta = {
     description = "Portable ASS/SSA subtitle renderer";
     homepage    = https://github.com/libass/libass;
     license     = licenses.isc;
     platforms   = platforms.unix;
-    maintainers = with maintainers; [ codyopel urkud ];
+    maintainers = with maintainers; [ codyopel ];
     repositories.git = git://github.com/libass/libass.git;
   };
 }

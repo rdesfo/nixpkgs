@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, unzip, mesa, libX11, SDL, openal }:
+{ stdenv, fetchurl, unzip, libGLU_combined, libX11, SDL, openal, runtimeShell }:
 stdenv.mkDerivation rec {
   name = "tremulous-${version}";
   version = "1.1.0";
@@ -15,7 +15,7 @@ stdenv.mkDerivation rec {
     url = "http://releases.mercenariesguild.net/tremded/mg_tremded_source_1.01.tar.gz";
     sha256 = "1njrqlhzjvy9myddzkagszwdcf3m4h08wip888w2rmbshs6kz6ql";
   };
-  buildInputs = [ unzip mesa libX11 SDL openal ];
+  buildInputs = [ unzip libGLU_combined libX11 SDL openal ];
   unpackPhase = ''
     unzip $src1
     cd tremulous
@@ -49,7 +49,7 @@ stdenv.mkDerivation rec {
     for b in tremulous tremded
     do
         cat << EOF > $out/bin/$b
-    #!/bin/sh
+    #!${runtimeShell}
     cd $out/opt/tremulous
     exec ./$b.$arch "\$@"
     EOF
@@ -57,7 +57,7 @@ stdenv.mkDerivation rec {
     done
   '';
   dontPatchELF = true;
-  meta = {
+  meta = with stdenv.lib; {
     description = "A game that blends a team based FPS with elements of an RTS";
     longDescription = ''
       Tremulous is a free, open source game that blends a team based FPS with
@@ -70,9 +70,12 @@ stdenv.mkDerivation rec {
       degree), healing functions and much more...
     '';
     homepage = http://www.tremulous.net;
-    license = [ "GPLv2" ];  # media under cc by-sa 2.5
-    maintainers = with stdenv.lib.maintainers; [ astsmtl ];
-    platforms = with stdenv.lib.platforms; linux;
+    license = with licenses; [
+      gpl2
+      cc-by-sa-25 /* media */
+    ];
+    maintainers = with maintainers; [ astsmtl ];
+    platforms = platforms.linux;
     broken = true;
   };
 }

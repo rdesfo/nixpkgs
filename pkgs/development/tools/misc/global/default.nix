@@ -1,24 +1,31 @@
-{ fetchurl, stdenv, libtool, ncurses, ctags, sqlite
-, pythonPackages, makeWrapper }:
+{ fetchurl, stdenv, libtool, makeWrapper
+, coreutils, ctags, ncurses, pythonPackages, sqlite, universal-ctags
+}:
 
 stdenv.mkDerivation rec {
-  name = "global-6.4";
+  name = "global-${version}";
+  version = "6.6.3";
 
   src = fetchurl {
     url = "mirror://gnu/global/${name}.tar.gz";
-    sha256 = "13i4zwx6gaibc4j79wd0hgxysw8ibxz9c018zxhydnxlyadzcnri";
+    sha256 = "0735pj47dnspf20n0j1px24p59nwjinlmlb2n32ln1hvdkprivnb";
   };
 
-  buildInputs = [ libtool ncurses makeWrapper ];
+  nativeBuildInputs = [ libtool makeWrapper ];
+
+  buildInputs = [ ncurses ];
+
   propagatedBuildInputs = [ pythonPackages.pygments ];
 
-  configurePhase =
-    '' ./configure --prefix="$out" --disable-static ''
-    + ''--with-posix-sort=$(type -p sort) ''
-    + ''--with-ltdl-include=${libtool}/include --with-ltdl-lib=${libtool}/lib ''
-    + ''--with-ncurses=${ncurses} ''
-    + ''--with-sqlite3=${sqlite} ''
-    + ''--with-exuberant-ctags=${ctags}/bin/ctags'';
+  configureFlags = [
+    "--with-ltdl-include=${libtool}/include"
+    "--with-ltdl-lib=${libtool.lib}/lib"
+    "--with-ncurses=${ncurses.dev}"
+    "--with-sqlite3=${sqlite.dev}"
+    "--with-exuberant-ctags=${ctags}/bin/ctags"
+    "--with-universal-ctags=${universal-ctags}/bin/ctags"
+    "--with-posix-sort=${coreutils}/bin/sort"
+  ];
 
   doCheck = true;
 
@@ -34,7 +41,6 @@ stdenv.mkDerivation rec {
 
   meta = with stdenv.lib; {
     description = "Source code tag system";
-
     longDescription = ''
       GNU GLOBAL is a source code tagging system that works the same way
       across diverse environments (Emacs, vi, less, Bash, web browser, etc).
@@ -45,12 +51,9 @@ stdenv.mkDerivation rec {
       independence of any editor.  It runs on a UNIX (POSIX) compatible
       operating system like GNU and BSD.
     '';
-
+    homepage = https://www.gnu.org/software/global/;
     license = licenses.gpl3Plus;
-
-    homepage = http://www.gnu.org/software/global/;
-
-    maintainers = with maintainers; [ pSub ];
+    maintainers = with maintainers; [ pSub peterhoeg ];
     platforms = platforms.unix;
   };
 }

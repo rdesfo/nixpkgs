@@ -1,26 +1,44 @@
-{ stdenv, fetchurl }:
+{ stdenv, fetchFromGitLab, makeWrapper, gcc, ncurses }:
 
 stdenv.mkDerivation rec {
   name = "icmake-${version}";
-  version = "7.22.00";
+  version = "9.02.08";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/icmake/icmake_${version}.orig.tar.gz";
-    sha256 = "013vxnilygad981zb2608f95q2h3svvbgpjvzvk16qyxjy4y4q6z";
+  src = fetchFromGitLab {
+    sha256 = "1pr5lagmdls3clzwa2xwcfa3k5750rf7i0j3zld0xirb41zx07q2";
+    rev = version;
+    repo = "icmake";
+    owner = "fbb-git";
   };
+
+
+  setSourceRoot = ''
+    sourceRoot=$(echo */icmake)
+  '';
+
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ gcc ];
 
   preConfigure = ''
     patchShebangs ./
-    sed -i "s;usr/;;g" INSTALL.im
+    substituteInPlace INSTALL.im --replace "usr/" ""
   '';
 
-  buildPhase = "./icm_bootstrap $out";
+  buildPhase = ''
+    ./icm_prepare $out
+    ./icm_bootstrap x
+  '';
 
-  installPhase = "./icm_install all /";
+  installPhase = ''
+    ./icm_install all /
+
+    wrapProgram $out/bin/icmbuild \
+     --prefix PATH : ${ncurses}/bin
+  '';
 
   meta = with stdenv.lib; {
     description = "A program maintenance (make) utility using a C-like grammar";
-    homepage = http://icmake.sourceforge.net/;
+    homepage = https://fbb-git.gitlab.io/icmake/;
     license = licenses.gpl3;
     maintainers = with maintainers; [ pSub ];
     platforms = platforms.linux;

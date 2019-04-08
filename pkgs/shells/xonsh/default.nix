@@ -1,31 +1,44 @@
-{stdenv, fetchurl, python3Packages}:
+{ stdenv, fetchFromGitHub, python3Packages, glibcLocales, coreutils, git }:
 
-python3Packages.buildPythonPackage rec {
-  name = "xonsh-${version}";
-  version = "0.1.3";
+python3Packages.buildPythonApplication rec {
+  pname = "xonsh";
+  version = "0.8.3";
 
-  # The logo xonsh prints during build contains unicode characters, and this
-  # fails because locales have not been set up in the build environment.
-  # We can fix this on Linux by setting:
-  #    export LOCALE_ARCHIVE=${pkgs.glibcLocales}/lib/locale/locale-archive
-  # but this would not be a cross platform solution, so it's simpler to just
-  # patch the setup.py script to not print the logo during build.
-  prePatch = ''
-    substituteInPlace setup.py --replace "print(logo)" ""
+  # fetch from github because the pypi package ships incomplete tests
+  src = fetchFromGitHub {
+    owner  = "scopatz";
+    repo   = "xonsh";
+    rev    = "refs/tags/${version}";
+    sha256 = "1qnghqswvqlwv9121r4maibmn2dvqmbr3fhsnngsj3q7plfp7yb2";
+  };
+
+  LC_ALL = "en_US.UTF-8";
+  postPatch = ''
+    sed -ie "s|/bin/ls|${coreutils}/bin/ls|" tests/test_execer.py
+    sed -ie 's|/usr/bin/env|${coreutils}/bin/env|' scripts/xon.sh
+
+    patchShebangs .
   '';
 
-  propagatedBuildInputs = [ python3Packages.ply ];
+  checkPhase = ''
+    HOME=$TMPDIR \
+      pytest \
+        -k 'not test_man_completion and not test_indir and not test_xonsh_party and not test_foreign_bash_data and not test_script and not test_single_command_no_windows and not test_redirect_out_to_file and not test_sourcefile and not test_printname and not test_printfile'
+  '';
 
-  src = fetchurl {
-    url = "https://github.com/scopatz/xonsh/archive/${version}.zip";
-    sha256 = "0p2d7p892w77ii8yy51vpw7jlz2y53k8g61m7l8bar3hr3qrl306";
-  };
+  checkInputs = [ python3Packages.pytest glibcLocales git ];
+
+  propagatedBuildInputs = with python3Packages; [ ply prompt_toolkit pygments ];
 
   meta = with stdenv.lib; {
     description = "A Python-ish, BASHwards-compatible shell";
-    homepage = "http://xonsh.org";
+    homepage = http://xon.sh/;
     license = licenses.bsd3;
-    maintainers = [ maintainers.spwhitt ];
+    maintainers = with maintainers; [ spwhitt garbas vrthra ];
     platforms = platforms.all;
+  };
+
+  passthru = {
+    shellPath = "/bin/xonsh";
   };
 }

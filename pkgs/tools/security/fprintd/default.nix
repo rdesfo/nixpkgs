@@ -1,21 +1,22 @@
 { stdenv, fetchurl, pkgconfig, intltool
-, libfprint, glib, dbus_glib, polkit, nss, pam, systemd }:
+, libfprint, glib, dbus-glib, polkit, nss, pam, systemd }:
 
 stdenv.mkDerivation rec {
-  name = "fprintd-0.6.0";
+  name = "fprintd-${version}";
+  version = "0.8.1";
 
   src = fetchurl {
-    url = "http://people.freedesktop.org/~hadess/${name}.tar.xz";
-    sha256 = "1by6nvlrqkwzcz2v2kyq6avi3h384vmlr42vj9s2yzcinkp64m1z";
+    url = "https://gitlab.freedesktop.org/libfprint/fprintd/uploads/bdd9f91909f535368b7c21f72311704a/fprintd-${version}.tar.xz";
+    sha256 = "124s0g9syvglgsmqnavp2a8c0zcq8cyaph8p8iyvbla11vfizs9l";
   };
 
-  buildInputs = [ libfprint glib dbus_glib polkit nss pam systemd ];
+  buildInputs = [ libfprint glib dbus-glib polkit nss pam systemd ];
   nativeBuildInputs = [ pkgconfig intltool ];
 
-  configureFlags = [ "--with-systemdsystemunitdir=$(out)/lib/systemd/system" ];
+  configureFlags = [ "--with-systemdsystemunitdir=$(out)/lib/systemd/system" "--localstatedir=/var" ];
 
   meta = with stdenv.lib; {
-    homepage = "http://www.freedesktop.org/wiki/Software/fprint/fprintd/";
+    homepage = https://fprint.freedesktop.org/;
     description = "D-Bus daemon that offers libfprint functionality over the D-Bus interprocess communication bus";
     license = licenses.gpl2;
     platforms = platforms.linux;

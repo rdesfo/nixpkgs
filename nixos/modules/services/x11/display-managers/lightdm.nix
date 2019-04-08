@@ -4,51 +4,31 @@ with lib;
 
 let
 
-  dmcfg = config.services.xserver.displayManager;
+  xcfg = config.services.xserver;
+  dmcfg = xcfg.displayManager;
   xEnv = config.systemd.services."display-manager".environment;
   cfg = dmcfg.lightdm;
 
-  inherit (pkgs) stdenv lightdm writeScript writeText;
+  dmDefault = xcfg.desktopManager.default;
+  wmDefault = xcfg.windowManager.default;
+  hasDefaultUserSession = dmDefault != "none" || wmDefault != "none";
 
-  # lightdm runs with clearenv(), but we need a few things in the enviornment for X to startup
+  inherit (pkgs) lightdm writeScript writeText;
+
+  # lightdm runs with clearenv(), but we need a few things in the environment for X to startup
   xserverWrapper = writeScript "xserver-wrapper"
     ''
-      #! /bin/sh
+      #! ${pkgs.bash}/bin/bash
       ${concatMapStrings (n: "export ${n}=\"${getAttr n xEnv}\"\n") (attrNames xEnv)}
-      exec ${dmcfg.xserverBin} ${dmcfg.xserverArgs}
+
+      display=$(echo "$@" | xargs -n 1 | grep -P ^:\\d\$ | head -n 1 | sed s/^://)
+      if [ -z "$display" ]
+      then additionalArgs=":0 -logfile /var/log/X.0.log"
+      else additionalArgs="-logfile /var/log/X.$display.log"
+      fi
+
+      exec ${dmcfg.xserverBin} ${toString dmcfg.xserverArgs} $additionalArgs "$@"
     '';
-
-  theme = pkgs.gnome3.gnome_themes_standard;
-  icons = pkgs.gnome3.gnome_icon_theme;
-
-  # The default greeter provided with this expression is the GTK greeter.
-  # Again, we need a few things in the environment for the greeter to run with
-  # fonts/icons.
-  wrappedGtkGreeter = stdenv.mkDerivation {
-    name = "lightdm-gtk-greeter";
-    buildInputs = [ pkgs.makeWrapper ];
-
-    buildCommand = ''
-      # This wrapper ensures that we actually get themes
-      makeWrapper ${pkgs.lightdm_gtk_greeter}/sbin/lightdm-gtk-greeter \
-        $out/greeter \
-        --prefix PATH : "${pkgs.glibc}/bin" \
-        --set GDK_PIXBUF_MODULE_FILE "$(find ${theme} -name loaders.cache)" \
-        --set GTK_PATH "${theme}:${pkgs.gtk3}" \
-        --set GTK_EXE_PREFIX "${theme}" \
-        --set GTK_DATA_PREFIX "${theme}" \
-        --set XDG_DATA_DIRS "${theme}/share:${icons}/share" \
-        --set XDG_CONFIG_HOME "${theme}/share"
-
-      cat - > $out/lightdm-gtk-greeter.desktop << EOF
-      [Desktop Entry]
-      Name=LightDM Greeter
-      Comment=This runs the LightDM Greeter
-      Exec=$out/greeter
-      Type=Application
-      EOF
-    '';
-  };
 
   usersConf = writeText "users.conf"
     ''
@@ -61,52 +41,146 @@ let
   lightdmConf = writeText "lightdm.conf"
     ''
       [LightDM]
-      greeter-user = ${config.users.extraUsers.lightdm.name}
-      greeters-directory = ${cfg.greeter.package}
-      sessions-directory = ${dmcfg.session.desktops}
+      ${optionalString cfg.greeter.enable ''
+        greeter-user = ${config.users.users.lightdm.name}
+        greeters-directory = ${cfg.greeter.package}
+      ''}
+      sessions-directory = ${dmcfg.session.desktops}/share/xsessions
+      ${cfg.extraConfig}
 
-      [SeatDefaults]
+      [Seat:*]
       xserver-command = ${xserverWrapper}
-      session-wrapper = ${dmcfg.session.script}
-      greeter-session = ${cfg.greeter.name}
+      session-wrapper = ${dmcfg.session.wrapper}
+      ${optionalString cfg.greeter.enable ''
+        greeter-session = ${cfg.greeter.name}
+      ''}
+      ${optionalString cfg.autoLogin.enable ''
+        autologin-user = ${cfg.autoLogin.user}
+        autologin-user-timeout = ${toString cfg.autoLogin.timeout}
+        autologin-session = ${defaultSessionName}
+      ''}
+      ${optionalString hasDefaultUserSession ''
+        user-session=${defaultSessionName}
+      ''}
+      ${optionalString (dmcfg.setupCommands != "") ''
+        display-setup-script=${pkgs.writeScript "lightdm-display-setup" ''
+          #!${pkgs.bash}/bin/bash
+          ${dmcfg.setupCommands}
+        ''}
+      ''}
+      ${cfg.extraSeatDefaults}
     '';
 
-  gtkGreeterConf = writeText "lightdm-gtk-greeter.conf"
-    ''
-    [greeter]
-    theme-name = Adwaita
-    icon-theme-name = Adwaita
-    background = ${cfg.background}
-    '';
-
+  defaultSessionName = dmDefault + optionalString (wmDefault != "none") ("+" + wmDefault);
 in
 {
+  # Note: the order in which lightdm greeter modules are imported
+  # here determines the default: later modules (if enable) are
+  # preferred.
+  imports = [
+    ./lightdm-greeters/gtk.nix
+    ./lightdm-greeters/mini.nix
+    ./lightdm-greeters/enso-os.nix
+    ./lightdm-greeters/pantheon.nix
+  ];
+
   options = {
+
     services.xserver.displayManager.lightdm = {
 
       enable = mkOption {
+        type = types.bool;
         default = false;
         description = ''
           Whether to enable lightdm as the display manager.
         '';
       };
 
-      greeter = mkOption {
-        description = ''
-          The LightDM greeter to login via. The package should be a directory
-          containing a .desktop file matching the name in the 'name' option.
-        '';
-        default = {
-          name = "lightdm-gtk-greeter";
-          package = wrappedGtkGreeter;
+      greeter =  {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+          description = ''
+            If set to false, run lightdm in greeterless mode. This only works if autologin
+            is enabled and autoLogin.timeout is zero.
+          '';
+        };
+        package = mkOption {
+          type = types.package;
+          description = ''
+            The LightDM greeter to login via. The package should be a directory
+            containing a .desktop file matching the name in the 'name' option.
+          '';
+
+        };
+        name = mkOption {
+          type = types.string;
+          description = ''
+            The name of a .desktop file in the directory specified
+            in the 'package' option.
+          '';
         };
       };
 
+      extraConfig = mkOption {
+        type = types.lines;
+        default = "";
+        example = ''
+          user-authority-in-system-dir = true
+        '';
+        description = "Extra lines to append to LightDM section.";
+      };
+
       background = mkOption {
-        default = "${pkgs.nixos-artwork}/gnome/Gnome_Dark.png";
+        type = types.str;
+        default = "${pkgs.nixos-artwork.wallpapers.simple-dark-gray-bottom}/share/artwork/gnome/nix-wallpaper-simple-dark-gray_bottom.png";
         description = ''
           The background image or color to use.
         '';
+      };
+
+      extraSeatDefaults = mkOption {
+        type = types.lines;
+        default = "";
+        example = ''
+          greeter-show-manual-login=true
+        '';
+        description = "Extra lines to append to SeatDefaults section.";
+      };
+
+      autoLogin = mkOption {
+        default = {};
+        description = ''
+          Configuration for automatic login.
+        '';
+
+        type = types.submodule {
+          options = {
+            enable = mkOption {
+              type = types.bool;
+              default = false;
+              description = ''
+                Automatically log in as the specified <option>autoLogin.user</option>.
+              '';
+            };
+
+            user = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              description = ''
+                User to be used for the automatic login.
+              '';
+            };
+
+            timeout = mkOption {
+              type = types.int;
+              default = 0;
+              description = ''
+                Show the greeter for this many seconds before automatic login occurs.
+              '';
+            };
+          };
+        };
       };
 
     };
@@ -114,35 +188,93 @@ in
 
   config = mkIf cfg.enable {
 
-    services.xserver.displayManager.slim.enable = false;
+    assertions = [
+      { assertion = cfg.autoLogin.enable -> cfg.autoLogin.user != null;
+        message = ''
+          LightDM auto-login requires services.xserver.displayManager.lightdm.autoLogin.user to be set
+        '';
+      }
+      { assertion = cfg.autoLogin.enable -> dmDefault != "none" || wmDefault != "none";
+        message = ''
+          LightDM auto-login requires that services.xserver.desktopManager.default and
+          services.xserver.windowManager.default are set to valid values. The current
+          default session: ${defaultSessionName} is not valid.
+        '';
+      }
+      { assertion = !cfg.greeter.enable -> (cfg.autoLogin.enable && cfg.autoLogin.timeout == 0);
+        message = ''
+          LightDM can only run without greeter if automatic login is enabled and the timeout for it
+          is set to zero.
+        '';
+      }
+    ];
 
-    services.xserver.displayManager.job = {
-      logsXsession = true;
+    # lightdm relaunches itself via just `lightdm`, so needs to be on the PATH
+    services.xserver.displayManager.job.execCmd = ''
+      export PATH=${lightdm}/sbin:$PATH
+      exec ${lightdm}/sbin/lightdm
+    '';
 
-      # lightdm relaunches itself via just `lightdm`, so needs to be on the PATH
-      execCmd = ''
-        export PATH=${lightdm}/sbin:$PATH
-        exec ${lightdm}/sbin/lightdm --log-dir=/var/log --run-dir=/run
-      '';
-    };
-
-    environment.etc."lightdm/lightdm-gtk-greeter.conf".source = gtkGreeterConf;
     environment.etc."lightdm/lightdm.conf".source = lightdmConf;
     environment.etc."lightdm/users.conf".source = usersConf;
 
     services.dbus.enable = true;
     services.dbus.packages = [ lightdm ];
 
-    security.pam.services.lightdm = { allowNullPassword = true; startSession = true; };
-    security.pam.services.lightdm-greeter = { allowNullPassword = true; startSession = true; };
+    # lightdm uses the accounts daemon to remember language/window-manager per user
+    services.accounts-daemon.enable = true;
 
-    users.extraUsers.lightdm = {
-      createHome = true;
-      home = "/var/lib/lightdm-data";
+    # Enable the accounts daemon to find lightdm's dbus interface
+    environment.systemPackages = [ lightdm ];
+
+    security.pam.services.lightdm = {
+      allowNullPassword = true;
+      startSession = true;
+    };
+    security.pam.services.lightdm-greeter = {
+      allowNullPassword = true;
+      startSession = true;
+      text = ''
+        auth     required pam_env.so envfile=${config.system.build.pamEnvironment}
+        auth     required pam_permit.so
+
+        account  required pam_permit.so
+
+        password required pam_deny.so
+
+        session  required pam_env.so envfile=${config.system.build.pamEnvironment}
+        session  required pam_unix.so
+        session  optional ${pkgs.systemd}/lib/security/pam_systemd.so
+      '';
+    };
+    security.pam.services.lightdm-autologin.text = ''
+        auth     requisite pam_nologin.so
+        auth     required  pam_succeed_if.so uid >= 1000 quiet
+        auth     required  pam_permit.so
+
+        account  include   lightdm
+
+        password include   lightdm
+
+        session  include   lightdm
+    '';
+
+    users.users.lightdm = {
+      home = "/var/lib/lightdm";
       group = "lightdm";
       uid = config.ids.uids.lightdm;
     };
 
-    users.extraGroups.lightdm.gid = config.ids.gids.lightdm;
+    systemd.tmpfiles.rules = [
+      "d /run/lightdm 0711 lightdm lightdm 0"
+      "d /var/cache/lightdm 0711 root lightdm -"
+      "d /var/lib/lightdm 1770 lightdm lightdm -"
+      "d /var/lib/lightdm-data 1775 lightdm lightdm -"
+      "d /var/log/lightdm 0711 root lightdm -"
+    ];
+
+    users.groups.lightdm.gid = config.ids.gids.lightdm;
+    services.xserver.tty     = null; # We might start multiple X servers so let the tty increment themselves..
+    services.xserver.display = null; # We specify our own display (and logfile) in xserver-wrapper up there
   };
 }

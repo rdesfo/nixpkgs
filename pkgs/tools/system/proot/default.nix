@@ -1,31 +1,44 @@
-{ stdenv, fetchgit, talloc, enableStatic ? false }:
+{ stdenv, fetchFromGitHub
+, talloc, docutils, swig, python, coreutils, enablePython ? true }:
 
 stdenv.mkDerivation rec {
-  name = "proot-${version}";
-  version = "4.0.3";
+  pname = "proot";
+  version = "5.1.0.20190305";
 
-  src = fetchgit {
-    url = "git://github.com/cedric-vincent/proot.git";
-    rev = "refs/tags/v${version}";
-    sha256 = "95a52b2fa47b2891eb2c6b6b0e14d42f6d48f6fd5181e359b007831f1a046e84";
+  src = fetchFromGitHub {
+    repo = "proot";
+    owner = "proot-me";
+    rev = "ff61c86cb26f71c06af22574d9d4cc3a77292781";
+    sha256 = "0qink34bjv0lshf3c8997w39r8yxgbhxpjbxw47l5xkvimlpc0dl";
   };
 
-  buildInputs = [ talloc ];
-
-  preBuild = stdenv.lib.optionalString enableStatic ''
-    export LDFLAGS="-static -L${talloc}/lib"
-  '' + ''
-    substituteInPlace GNUmakefile --replace "/usr/local" "$out"
+  postPatch = ''
+    substituteInPlace src/GNUmakefile \
+      --replace /bin/echo ${coreutils}/bin/echo
   '';
 
-  sourceRoot = "proot/src";
+  buildInputs = [ talloc ] ++ stdenv.lib.optional enablePython python;
+  nativeBuildInputs = [ docutils ] ++ stdenv.lib.optional enablePython swig;
+
+  enableParallelBuilding = true;
+
+  makeFlags = [ "-C src" ];
+
+  postBuild = ''
+    make -C doc proot/man.1
+  '';
+
+  installFlags = [ "PREFIX=${placeholder "out"}" ];
+
+  postInstall = ''
+    install -Dm644 doc/proot/man.1 $out/share/man/man1/proot.1
+  '';
 
   meta = with stdenv.lib; {
-    homepage = http://proot.me;
+    homepage = http://proot-me.github.io;
     description = "User-space implementation of chroot, mount --bind and binfmt_misc";
     platforms = platforms.linux;
     license = licenses.gpl2;
-    maintainers = [ maintainers.ianwookim ];
+    maintainers = with maintainers; [ ianwookim makefu veprbl dtzWill ];
   };
 }
-

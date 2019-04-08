@@ -1,41 +1,26 @@
 { stdenv
 , fetchFromGitHub
-, autoconf
-, automake
-, findutils                     # for xargs
-, gettext_0_19
+, autoreconfHook
+                     # for xargs
+, gettext
 , libtool
 , makeWrapper
 , texinfo
 }:
 
-let
-
- version = "1.4.6";
-
-in stdenv.mkDerivation {
-
+stdenv.mkDerivation rec {
   name = "fswatch-${version}";
+  version = "1.14.0";
 
   src = fetchFromGitHub {
     owner = "emcrisostomo";
     repo = "fswatch";
     rev = version;
-    sha256 = "0flq8baqzifhmf61zyiipdipvgy4h0kl551clxrhwa8gvzf75im4";
+    sha256 = "1d1fvm36qgh6a5j9v24wai61d297pvzxr14jngjlhh4i474ff21i";
   };
 
-  buildInputs = [ autoconf automake gettext_0_19 libtool makeWrapper texinfo ];
-
-  preConfigure = ''
-    ./autogen.sh
-  '';
-
-  postFixup = ''
-    for prog in fswatch-run fswatch-run-bash; do
-      wrapProgram $out/bin/$prog \
-        --prefix PATH "${findutils}/bin"
-    done
-  '';
+  nativeBuildInputs = [ autoreconfHook ];
+  buildInputs = [ gettext libtool makeWrapper texinfo ];
 
   meta = with stdenv.lib; {
     description = "A cross-platform file change monitor with multiple backends";
@@ -44,5 +29,4 @@ in stdenv.mkDerivation {
     platforms = platforms.all;
     maintainers = with maintainers; [ pSub ];
   };
-
 }

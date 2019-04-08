@@ -1,64 +1,50 @@
-{ fetchurl, stdenv, m4, glibc, gtk3, libexif, libgphoto2, libsoup, libxml2, vala, sqlite, webkitgtk24x
-, pkgconfig, gnome3, gst_all_1, which, udev, libraw, glib, json_glib, gettext, desktop_file_utils
-, lcms2, gdk_pixbuf, librsvg, makeWrapper, gnome_doc_utils, hicolor_icon_theme }:
+{ fetchurl, stdenv, meson, ninja, gtk3, libexif, libgphoto2, libsoup, libxml2, vala, sqlite
+, webkitgtk, pkgconfig, gnome3, gst_all_1, libgudev, libraw, glib, json-glib, gcr
+, gettext, desktop-file-utils, gdk_pixbuf, librsvg, wrapGAppsHook
+, gobject-introspection, itstool, libgdata, python3 }:
 
-# for dependencies see http://www.yorba.org/projects/shotwell/install/
+# for dependencies see https://wiki.gnome.org/Apps/Shotwell/BuildingAndInstalling
 
 let
-  rest = stdenv.mkDerivation rec {
-    name = "rest-0.7.12";
-
-    src = fetchurl {
-      url = "mirror://gnome/sources/rest/0.7/${name}.tar.xz";
-      sha256 = "0fmg7fq5fx0jg3ryk71kwdkspsvj42acxy9imk7vznkqj29a9zqn";
-    };
-    
-    configureFlags = "--with-ca-certificates=/etc/ssl/certs/ca-bundle.crt";
-    
-    buildInputs = [ pkgconfig glib libsoup ];
-  };
+  pname = "shotwell";
+  version = "0.30.2";
 in stdenv.mkDerivation rec {
-  version = "0.20.2";
-  name = "shotwell-${version}";
+  name = "${pname}-${version}";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/shotwell/0.20/${name}.tar.xz";
-    sha256 = "0h5pdczsrkplvlvq54zk3am4kjmfpd6pn2sz0ky8lfq1fngwiqip";
+    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
+    sha256 = "0pam0si110vkc65kh59lrmgkv91f9zxmf1gpfm99ixjgw25rfi8r";
   };
 
-  NIX_CFLAGS_COMPILE = "-I${glib}/include/glib-2.0 -I${glib}/lib/glib-2.0/include";
-  
-  configureFlags = [ "--disable-gsettings-convert-install" ];
-  
-  preConfigure = ''
-    patchShebangs .
+  nativeBuildInputs = [
+    meson ninja vala pkgconfig itstool gettext desktop-file-utils python3 wrapGAppsHook gobject-introspection
+  ];
+
+  buildInputs = [
+    gtk3 libexif libgphoto2 libsoup libxml2 sqlite webkitgtk
+    gst_all_1.gstreamer gst_all_1.gst-plugins-base gnome3.libgee
+    libgudev gnome3.gexiv2 gnome3.gsettings-desktop-schemas
+    libraw json-glib glib gdk_pixbuf librsvg gnome3.rest
+    gcr gnome3.adwaita-icon-theme libgdata
+  ];
+
+  postPatch = ''
+    chmod +x build-aux/meson/postinstall.py # patchShebangs requires executable file
+    patchShebangs build-aux/meson/postinstall.py
   '';
 
-  postInstall = ''
-    mkdir -p $out/share/gsettings-schemas/$name
-    mv $out/share/glib-2.0 $out/share/gsettings-schemas/$name/
-  '';
-
-  preFixup = ''
-    wrapProgram "$out/bin/shotwell" \
-     --set GDK_PIXBUF_MODULE_FILE "$GDK_PIXBUF_MODULE_FILE" \
-     --prefix XDG_DATA_DIRS : "$XDG_ICON_DIRS:${gtk3}/share:$out/share:$GSETTINGS_SCHEMAS_PATH" \
-     --prefix GIO_EXTRA_MODULES : "${gnome3.dconf}/lib/gio/modules"
-  '';
-
-
-  buildInputs = [ m4 glibc gtk3 libexif libgphoto2 libsoup libxml2 vala sqlite webkitgtk24x pkgconfig
-                  gst_all_1.gstreamer gst_all_1.gst-plugins-base gnome3.libgee which udev gnome3.gexiv2
-                  libraw rest json_glib gettext desktop_file_utils glib lcms2 gdk_pixbuf librsvg
-                  makeWrapper gnome_doc_utils
-                  gnome3.gnome_icon_theme gnome3.gnome_icon_theme_symbolic
-                  hicolor_icon_theme ];
+  passthru = {
+    updateScript = gnome3.updateScript {
+      packageName = pname;
+      versionPolicy = "none";
+    };
+  };
 
   meta = with stdenv.lib; {
     description = "Popular photo organizer for the GNOME desktop";
-    homepage = http://www.yorba.org/projects/shotwell/;
+    homepage = https://wiki.gnome.org/Apps/Shotwell;
     license = licenses.lgpl21Plus;
-    maintainers = with maintainers; [iElectric];
+    maintainers = with maintainers; [domenkozar];
     platforms = platforms.linux;
   };
 }

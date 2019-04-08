@@ -1,24 +1,41 @@
-{ stdenv, fetchurl, cmake, libxml2, swig2, python, glib }:
+{ stdenv,  autoreconfHook, fetchFromGitHub, pkgconfig, python2Packages, glib }:
 
+let
+  inherit (python2Packages) python cython;
+in
 stdenv.mkDerivation rec {
-  name = "libplist-1.3";
+  pname = "libplist";
+  version = "2019-01-20";
 
-  nativeBuildInputs = [ cmake swig2 ];
+  name = "${pname}-${version}";
 
-  patches = [ ./swig.patch ];
-
-  propagatedBuildInputs = [ libxml2 glib python ];
-
-  passthru.swig = swig2;
-
-  src = fetchurl {
-    url = "http://github.com/downloads/JonathanBeck/libplist/${name}.tar.bz2";
-    sha256 = "1c5nwp9jbsp5kx8avmmsr5g7qdngnqlplh2sjbygmhydb6n8lb4q";
+  src = fetchFromGitHub {
+    owner = "libimobiledevice";
+    repo = pname;
+    rev = "bec850fe399639f3b8582a39386216970dea15ed";
+    sha256 = "197yw8xz8x2xld8b6975scgnl30j4ibm9llmzljyqngs0zsdwnin";
   };
 
-  meta = {
-    homepage = http://github.com/JonathanBeck/libplist;
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [ stdenv.lib.maintainers.urkud ];
+  outputs = ["bin" "dev" "out" "py"];
+
+  nativeBuildInputs = [
+    pkgconfig
+    python
+    cython
+    autoreconfHook
+  ];
+
+  propagatedBuildInputs = [ glib ];
+
+  postFixup = ''
+    moveToOutput "lib/${python.libPrefix}" "$py"
+  '';
+
+  meta = with stdenv.lib; {
+    description = "A library to handle Apple Property List format in binary or XML";
+    homepage = https://github.com/libimobiledevice/libplist;
+    license = licenses.lgpl21Plus;
+    maintainers = [ ];
+    platforms = platforms.linux;
   };
 }

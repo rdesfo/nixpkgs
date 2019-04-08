@@ -7,13 +7,13 @@ let
   generationsDirBuilder = pkgs.substituteAll {
     src = ./generations-dir-builder.sh;
     isExecutable = true;
-    inherit (pkgs) bash;
-    path = [pkgs.coreutils pkgs.gnused pkgs.gnugrep];
+    inherit (pkgs.buildPackages) bash;
+    path = with pkgs.buildPackages; [coreutils gnused gnugrep];
     inherit (config.boot.loader.generationsDir) copyKernels;
   };
 
   # Temporary check, for nixos to cope both with nixpkgs stdenv-updates and trunk
-  platform = pkgs.stdenv.platform;
+  inherit (pkgs.stdenv.hostPlatform) platform;
 
 in
 
@@ -44,10 +44,10 @@ in
       copyKernels = mkOption {
         default = false;
         type = types.bool;
-        description = "
+        description = ''
           Whether copy the necessary boot files into /boot, so
           /nix/store is not needed by the boot loader.
-        ";
+        '';
       };
 
     };

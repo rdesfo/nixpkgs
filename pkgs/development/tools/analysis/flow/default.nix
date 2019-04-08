@@ -1,27 +1,29 @@
-{ stdenv, fetchFromGitHub, ocaml, libelf }:
+{ stdenv, fetchFromGitHub, ocamlPackages, cf-private, CoreServices }:
 
 stdenv.mkDerivation rec {
-  version = "0.1.0";
-  name = "flow-${version}";
+  pname = "flow";
+  version = "0.96.0";
+
   src = fetchFromGitHub {
-    owner = "facebook";
-    repo = "flow";
-    rev = "v${version}";
-    sha256 = "1f33zmajd6agb36gp8bwj0yqihjhxnkpig9x3a4ggn369x6ixhn3";
+    owner  = "facebook";
+    repo   = "flow";
+    rev    = "refs/tags/v${version}";
+    sha256 = "04al9jnaxgh8la6s2pzzpzm6pyfc5c6g7pc8cwz4xcngbsw60cpn";
   };
 
   installPhase = ''
-    mkdir -p $out/bin
-    cp bin/flow $out/bin/
+    install -Dm755 bin/flow $out/bin/flow
+    install -Dm644 resources/shell/bash-completion $out/share/bash-completion/completions/flow
   '';
 
-  buildInputs = [ ocaml libelf ];
+  buildInputs = (with ocamlPackages; [ ocaml findlib ocamlbuild dtoa core_kernel sedlex ocaml_lwt lwt_log lwt_ppx ppx_deriving ppx_gen_rec ppx_tools_versioned visitors wtf8 ])
+    ++ stdenv.lib.optionals stdenv.isDarwin [ cf-private CoreServices ];
 
   meta = with stdenv.lib; {
-    homepage = "http://flowtype.org/";
     description = "A static type checker for JavaScript";
-    license = stdenv.lib.licenses.bsd3;
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = with maintainers; [ puffnfresh ];
+    homepage = https://flow.org/;
+    license = licenses.mit;
+    platforms = ocamlPackages.ocaml.meta.platforms;
+    maintainers = with maintainers; [ puffnfresh globin ];
   };
 }

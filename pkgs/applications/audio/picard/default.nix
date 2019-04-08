@@ -1,41 +1,40 @@
-{ stdenv, buildPythonPackage, fetchurl, gettext
-, pkgconfig, libofa, ffmpeg, chromaprint
-, pyqt4, mutagen, python-libdiscid
-}:
+{ stdenv, python3Packages, fetchFromGitHub, gettext, chromaprint }:
 
-let version = "1.3.2"; in
-buildPythonPackage {
-  name = "picard-${version}";
-  namePrefix = "";
+let
+  pythonPackages = python3Packages;
+in pythonPackages.buildPythonApplication rec {
+  pname = "picard";
+  version = "2.1.3";
 
-  src = fetchurl {
-    url = "http://ftp.musicbrainz.org/pub/musicbrainz/picard/picard-${version}.tar.gz";
-    sha256 = "0821xb7gyg0rhch8s3qkzmak90wjpcxkv9a364yv6bmqc12j6a77";
+  src = fetchFromGitHub {
+    owner = "metabrainz";
+    repo = pname;
+    rev = "release-${version}";
+    sha256 = "1armg8vpvnbpk7rrfk9q7nj5gm56rza00ni9qwdyqpxp1xaz6apj";
   };
 
-  buildInputs = [
-    pkgconfig
-    ffmpeg
-    libofa
-    gettext
-  ];
+  nativeBuildInputs = [ gettext ];
 
-  propagatedBuildInputs = [
-    pyqt4
+  propagatedBuildInputs = with pythonPackages; [
+    pyqt5
     mutagen
-    python-libdiscid
+    chromaprint
+    discid
   ];
 
   installPhase = ''
     python setup.py install --prefix="$out"
   '';
 
-  doCheck = false;
+  prePatch = ''
+    # Pesky unicode punctuation.
+    substituteInPlace setup.cfg --replace "‘" "'"
+  '';
 
   meta = with stdenv.lib; {
-    homepage = "http://musicbrainz.org/doc/MusicBrainz_Picard";
+    homepage = http://musicbrainz.org/doc/MusicBrainz_Picard;
     description = "The official MusicBrainz tagger";
-    maintainers = with maintainers; [ emery ];
+    maintainers = with maintainers; [ ehmry ];
     license = licenses.gpl2;
     platforms = platforms.all;
   };

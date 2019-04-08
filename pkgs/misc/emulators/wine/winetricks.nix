@@ -1,16 +1,10 @@
-{ stdenv, fetchFromGitHub, wine, perl, which, coreutils, zenity, curl
+{ stdenv, callPackage, wine, perl, which, coreutils, zenity, curl
 , cabextract, unzip, p7zip, gnused, gnugrep, bash } :
 
-let version = "20150316";
-in stdenv.mkDerivation rec {
-  name = "winetricks-${version}";
+stdenv.mkDerivation rec {
+  name = "winetricks-${src.version}";
 
-  src = fetchFromGitHub {
-    owner = "Winetricks";
-    repo = "winetricks";
-    rev = version;
-    sha256 = "00c55jpca6l3v3p02xc0gy5l4xb17gf90282hq5h85nh72kqsbrh";
-  };
+  src = (callPackage ./sources.nix {}).winetricks;
 
   buildInputs = [ perl which ];
 
@@ -19,6 +13,8 @@ in stdenv.mkDerivation rec {
     [ wine perl which coreutils zenity curl cabextract unzip p7zip gnused gnugrep bash ];
 
   makeFlags = [ "PREFIX=$(out)" ];
+
+  doCheck = false; # requires "bashate"
 
   postInstall = ''
     sed -i \
@@ -29,7 +25,8 @@ in stdenv.mkDerivation rec {
   meta = {
     description = "A script to install DLLs needed to work around problems in Wine";
     license = stdenv.lib.licenses.lgpl21;
-    homepage = http://code.google.com/p/winetricks/;
+    homepage = https://github.com/Winetricks/winetricks;
     maintainers = with stdenv.lib.maintainers; [ the-kenny ];
+    platforms = with stdenv.lib.platforms; linux;
   };
 }

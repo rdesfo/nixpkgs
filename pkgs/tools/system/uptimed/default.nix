@@ -1,15 +1,18 @@
 { stdenv, fetchFromGitHub, autoreconfHook }:
 
-let version = "0.3.18"; in
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   name = "uptimed-${version}";
-  
+  version = "0.4.1";
+
   src = fetchFromGitHub {
-    sha256 = "108h8ck8cyzvf3xv23vzyj0j8dffdmwavj6nbn9ryqhqhqmk4fhb";
+    sha256 = "0hqs7n3agayckwdgwadzw5shpdh4h1inqgvp4zr5fi324pj5x80j";
     rev = "v${version}";
     repo = "uptimed";
     owner = "rpodgorny";
   };
+
+  nativeBuildInputs = [ autoreconfHook ];
+  patches = [ ./no-var-spool-install.patch ];
 
   meta = with stdenv.lib; {
     description = "Uptime record daemon";
@@ -20,11 +23,8 @@ stdenv.mkDerivation {
       which can also easily be used to show your records on a web page.
     '';
     homepage = https://github.com/rpodgorny/uptimed/;
-    license = with licenses; gpl2;
-    platforms = with platforms; linux;
+    license = licenses.gpl2;
+    platforms = platforms.linux;
   };
 
-  patches = [ ./no-var-spool-install.patch ];
-
-  buildInputs = [ autoreconfHook ];
 }

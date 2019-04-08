@@ -9,7 +9,7 @@ let
   cfg = config.services.cjdns;
 
   connectToSubmodule =
-  { options, ... }:
+  { ... }:
   { options =
     { password = mkOption {
       type = types.str;
@@ -28,21 +28,21 @@ let
     };
   };
 
-  peers = mapAttrsToList (n: v: v) (cfg.ETHInterface.connectTo // cfg.UDPInterface.connectTo);
+  # Additional /etc/hosts entries for peers with an associated hostname
+  cjdnsExtraHosts = import (pkgs.runCommand "cjdns-hosts" {}
+    # Generate a builder that produces an output usable as a Nix string value
+    ''
+      exec >$out
+      echo \'\'
+      ${concatStringsSep "\n" (mapAttrsToList (k: v:
+          optionalString (v.hostname != "")
+            "echo $(${pkgs.cjdns}/bin/publictoip6 ${v.publicKey}) ${v.hostname}")
+          (cfg.ETHInterface.connectTo // cfg.UDPInterface.connectTo))}
+      echo \'\'
+    '');
 
-  pubs  = toString (map (p: if p.hostname == "" then "" else p.publicKey) peers);
-  hosts = toString (map (p: if p.hostname == "" then "" else p.hostname)  peers);
-
-  cjdnsHosts =
-    if hosts != "" then
-      import (pkgs.stdenv.mkDerivation {
-        name = "cjdns-hosts";
-        builder = ./cjdns-hosts.sh;
-
-        inherit (pkgs) cjdns;
-        inherit pubs hosts;
-      })
-    else "";
+  parseModules = x:
+    x // { connectTo = mapAttrs (name: value: { inherit (value) password publicKey; }) x.connectTo; };
 
   # would be nice to  merge 'cfg' with a //,
   # but the json nesting is wacky.
@@ -53,8 +53,8 @@ let
     };
     authorizedPasswords = map (p: { password = p; }) cfg.authorizedPasswords;
     interfaces = {
-      ETHInterface = if (cfg.ETHInterface.bind != "") then [ cfg.ETHInterface ] else [ ];
-      UDPInterface = if (cfg.UDPInterface.bind != "") then [ cfg.UDPInterface ] else [ ];
+      ETHInterface = if (cfg.ETHInterface.bind != "") then [ (parseModules cfg.ETHInterface) ] else [ ];
+      UDPInterface = if (cfg.UDPInterface.bind != "") then [ (parseModules cfg.UDPInterface) ] else [ ];
     };
 
     privateKey = "@CJDNS_PRIVATE_KEY@";
@@ -92,8 +92,8 @@ in
       };
 
       confFile = mkOption {
-        type = types.str;
-        default = "";
+        type = types.nullOr types.path;
+        default = null;
         example = "/etc/cjdroute.conf";
         description = ''
           Ignore all other cjdns options and load configuration from this file.
@@ -109,14 +109,14 @@ in
           "49275fut6tmzu354pq70sr5b95qq0vj"
         ];
         description = ''
-          Any remote cjdns nodes that offer these passwords on 
+          Any remote cjdns nodes that offer these passwords on
           connection will be allowed to route through this node.
         '';
       };
-    
+
       admin = {
         bind = mkOption {
-          type = types.string;
+          type = types.str;
           default = "127.0.0.1:11234";
           description = ''
             Bind the administration port to this address and port.
@@ -126,7 +126,7 @@ in
 
       UDPInterface = {
         bind = mkOption {
-          type = types.string;
+          type = types.str;
           default = "";
           example = "192.168.1.32:43211";
           description = ''
@@ -151,12 +151,15 @@ in
 
       ETHInterface = {
         bind = mkOption {
-        default = "";
-        example = "eth0";
-        description = ''
-          Bind to this device for native ethernet operation.
-        '';
-      };
+          type = types.str;
+          default = "";
+          example = "eth0";
+          description =
+            ''
+              Bind to this device for native ethernet operation.
+              <literal>all</literal> is a pseudo-name which will try to connect to all devices.
+            '';
+        };
 
         beacon = mkOption {
           type = types.int;
@@ -192,22 +195,33 @@ in
         };
       };
 
+      addExtraHosts = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Whether to add cjdns peers with an associated hostname to
+          <filename>/etc/hosts</filename>.  Beware that enabling this
+          incurs heavy eval-time costs.
+        '';
+      };
+
     };
 
   };
 
-  config = mkIf config.services.cjdns.enable {
+  config = mkIf cfg.enable {
 
     boot.kernelModules = [ "tun" ];
 
     # networking.firewall.allowedUDPPorts = ...
 
     systemd.services.cjdns = {
-      description = "encrypted networking for everybody";
-      wantedBy = [ "network.target" ];
-      after = [ "networkSetup.service" "network-interfaces.target" ];
+      description = "cjdns: routing engine designed for security, scalability, speed and ease of use";
+      wantedBy = [ "multi-user.target" "sleep.target"];
+      after = [ "network-online.target" ];
+      bindsTo = [ "network-online.target" ];
 
-      preStart = if cfg.confFile != "" then "" else ''
+      preStart = if cfg.confFile != null then "" else ''
         [ -e /etc/cjdns.keys ] && source /etc/cjdns.keys
 
         if [ -z "$CJDNS_PRIVATE_KEY" ]; then
@@ -223,13 +237,13 @@ in
         fi
 
         if [ -z "$CJDNS_ADMIN_PASSWORD" ]; then
-            echo "CJDNS_ADMIN_PASSWORD=$(${pkgs.coreutils}/bin/head -c 96 /dev/urandom | ${pkgs.coreutils}/bin/tr -dc A-Za-z0-9)" \
+            echo "CJDNS_ADMIN_PASSWORD=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 96)" \
                 >> /etc/cjdns.keys
         fi
       '';
 
       script = (
-        if cfg.confFile != "" then "${pkg}/bin/cjdroute < ${cfg.confFile}" else
+        if cfg.confFile != null then "${pkg}/bin/cjdroute < ${cfg.confFile}" else
           ''
             source /etc/cjdns.keys
             echo '${cjdrouteConf}' | sed \
@@ -241,14 +255,22 @@ in
 
       serviceConfig = {
         Type = "forking";
-        Restart = "on-failure";
+        Restart = "always";
+        StartLimitInterval = 0;
+        RestartSec = 1;
+        CapabilityBoundingSet = "CAP_NET_ADMIN CAP_NET_RAW CAP_SETUID";
+        ProtectSystem = true;
+        # Doesn't work on i686, causing service to fail
+        MemoryDenyWriteExecute = !pkgs.stdenv.isi686;
+        ProtectHome = true;
+        PrivateTmp = true;
       };
     };
 
-    networking.extraHosts = "${cjdnsHosts}";
+    networking.extraHosts = mkIf cfg.addExtraHosts cjdnsExtraHosts;
 
     assertions = [
-      { assertion = ( cfg.ETHInterface.bind != "" || cfg.UDPInterface.bind != "" || cfg.confFile == "" );
+      { assertion = ( cfg.ETHInterface.bind != "" || cfg.UDPInterface.bind != "" || cfg.confFile != null );
         message = "Neither cjdns.ETHInterface.bind nor cjdns.UDPInterface.bind defined.";
       }
       { assertion = config.networking.enableIPv6;

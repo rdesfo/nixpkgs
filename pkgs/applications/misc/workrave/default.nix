@@ -1,32 +1,35 @@
-{ stdenv, fetchurl, autoconf, automake, gettext, intltool, libtool, pkgconfig,
-  libXtst, cheetah, libXScrnSaver,
-  glib, glibmm,
-  gtk, gtkmm,
-  atk,
-  pango, pangomm,
-  cairo, cairomm,
-  dbus, dbus_glib,
-  GConf, gconfmm,
-  gdome2, gstreamer, libsigcxx }:
+{ stdenv, fetchFromGitHub, wrapGAppsHook
+, autoconf, autoconf-archive, automake, gettext, intltool, libtool, pkgconfig
+, libICE, libSM, libXScrnSaver, libXtst, cheetah
+, gobject-introspection, glib, glibmm, gtkmm3, atk, pango, pangomm, cairo
+, cairomm , dbus, dbus-glib, gdome2, gstreamer, gst-plugins-base
+, gst-plugins-good, libsigcxx }:
 
 stdenv.mkDerivation rec {
-  version = "v1_10_6";
   name = "workrave-${version}";
+  version = "1.10.31";
 
-  src = fetchurl {
-    url = "http://github.com/rcaelers/workrave/archive/${version}.tar.gz";
-    sha256 = "0q2p83n33chbqzdcdm7ykfsy73frfi6drxzm4qidxwzpzsxrysgq";
+  src = let
+  in fetchFromGitHub {
+    sha256 = "0v2mx2idaxlsyv5w66b7pknlill9j9i2gqcs3vq54gak7ix9fj1p";
+    rev = with stdenv.lib;
+      "v" + concatStringsSep "_" (splitString "." version);
+    repo = "workrave";
+    owner = "rcaelers";
   };
 
+  nativeBuildInputs = [
+    autoconf autoconf-archive automake gettext intltool libtool pkgconfig wrapGAppsHook
+  ];
   buildInputs = [
-    autoconf automake gettext intltool libtool pkgconfig libXtst cheetah
-    libXScrnSaver
-
-    glib glibmm gtk gtkmm atk pango pangomm cairo cairomm
-    dbus dbus_glib GConf gconfmm gdome2 gstreamer libsigcxx
+    libICE libSM libXScrnSaver libXtst cheetah
+    gobject-introspection glib glibmm gtkmm3 atk pango pangomm cairo cairomm
+    dbus dbus-glib gdome2 gstreamer gst-plugins-base gst-plugins-good libsigcxx
   ];
 
   preConfigure = "./autogen.sh";
+
+  enableParallelBuilding = true;
 
   meta = with stdenv.lib; {
     description = "A program to help prevent Repetitive Strain Injury";

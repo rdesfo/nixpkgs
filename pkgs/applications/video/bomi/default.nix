@@ -1,7 +1,10 @@
-{ stdenv, fetchurl, fetchFromGitHub, pkgconfig, perl, python3, which
-, libX11, libxcb, qt5, mesa
-, ffmpeg
+{ config, stdenv, fetchFromGitHub
+, fetchpatch, pkgconfig, perl, python, which
+, libX11, libxcb, libGLU_combined
+, qtbase, qtdeclarative, qtquickcontrols, qttools, qtx11extras, qmake, makeWrapper
 , libchardet
+, ffmpeg
+
 , mpg123
 , libass
 , libdvdread
@@ -13,38 +16,54 @@
 , libbluray
 , jackSupport ? false, jack ? null
 , portaudioSupport ? false, portaudio ? null
-, pulseSupport ? true, pulseaudio ? null
+, pulseSupport ? config.pulseaudio or stdenv.isLinux, libpulseaudio ? null
 , cddaSupport ? false, libcdda ? null
+, youtubeSupport ? true, youtube-dl ? null
 }:
+
+with stdenv.lib;
 
 assert jackSupport -> jack != null;
 assert portaudioSupport -> portaudio != null;
-assert pulseSupport -> pulseaudio != null;
+assert pulseSupport -> libpulseaudio != null;
 assert cddaSupport -> libcdda != null;
-
-let
-  waf = fetchurl {
-    url = http://ftp.waf.io/pub/release/waf-1.8.4;
-    sha256 = "1a7skwgpl91adhcwlmdr76xzdpidh91hvcmj34zz6548bpx3a87h";
-  };
-
-in
+assert youtubeSupport -> youtube-dl != null;
 
 stdenv.mkDerivation rec {
   name = "bomi-${version}";
-  version = "0.9.5";
+  version = "0.9.11";
 
   src = fetchFromGitHub {
     owner = "xylosper";
     repo = "bomi";
     rev = "v${version}";
-    sha256 = "1pf82dp7v18yd7knsjl853sfzhq4rqc3sq15jgqiw37096gp0sll";
+    sha256 = "0a7n46gn3n5098lxxvl3s29s8jlkzss6by9074jx94ncn9cayf2h";
   };
 
+  patches = [
+    (fetchpatch rec {
+      name = "bomi-compilation-fix.patch";
+      url = "https://svnweb.mageia.org/packages/cauldron/bomi/current/SOURCES/${name}?revision=995725&view=co&pathrev=995725";
+      sha256 = "1dwryya5ljx35dbx6ag9d3rjjazni2mfn3vwirjdijdy6yz22jm6";
+    })
+    (fetchpatch rec {
+      name = "bomi-fix-expected-unqualified-id-before-numeric-constant-unix.patch";
+      url = "https://svnweb.mageia.org/packages/cauldron/bomi/current/SOURCES/${name}?revision=995725&view=co&pathrev=995725";
+      sha256 = "0n3xsrdrggimzw30gxlnrr088ndbdjqlqr46dzmfv8zan79lv5ri";
+    })
+  ];
+
   buildInputs = with stdenv.lib;
-                [ libX11 libxcb qt5 mesa
+                [ libX11
+                  libxcb
+                  libGLU_combined
+                  qtbase
+                  qtx11extras
+                  qtdeclarative
+                  qtquickcontrols
                   ffmpeg
                   libchardet
+
                   mpg123
                   libass
                   libdvdread
@@ -58,20 +77,25 @@ stdenv.mkDerivation rec {
                 ]
                 ++ optional jackSupport jack
                 ++ optional portaudioSupport portaudio
-                ++ optional pulseSupport pulseaudio
+                ++ optional pulseSupport libpulseaudio
                 ++ optional cddaSupport libcdda
                 ;
 
   preConfigure = ''
     patchShebangs configure
-    # src/mpv/waf build-mpv; do
   '';
 
   preBuild = ''
+    patchShebangs src/mpv/waf
     patchShebangs build-mpv
-    install -m755 ${waf} src/mpv/waf
-    sed -i '1 s,.*,#!${python3.interpreter},' src/mpv/waf
   '';
+
+  postInstall = ''
+    wrapProgram $out/bin/bomi \
+      ${optionalString youtubeSupport "--prefix PATH ':' '${youtube-dl}/bin'"}
+  '';
+
+  dontUseQmakeConfigure = true;
 
   configureFlags = with stdenv.lib;
                    [ "--qmake=qmake" ]
@@ -81,9 +105,7 @@ stdenv.mkDerivation rec {
                    ++ optional cddaSupport "--enable-cdda"
                    ;
 
-  nativeBuildInputs = [ pkgconfig perl which ];
-
-  enableParallelBuilding = true;
+  nativeBuildInputs = [ makeWrapper pkgconfig perl python which qttools qmake ];
 
   meta = with stdenv.lib; {
     description = "Powerful and easy-to-use multimedia player";

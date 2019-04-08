@@ -13,13 +13,31 @@ in {
       enable = mkOption {
         description = "Whether to enable the Mesos Master.";
         default = false;
-        type = types.uniq types.bool;
+        type = types.bool;
+      };
+
+      ip = mkOption {
+        description = "IP address to listen on.";
+        default = "0.0.0.0";
+        type = types.str;
       };
 
       port = mkOption {
         description = "Mesos Master port";
         default = 5050;
         type = types.int;
+      };
+
+      advertiseIp = mkOption {
+        description = "IP address advertised to reach this master.";
+        default = null;
+        type = types.nullOr types.str;
+      };
+
+      advertisePort = mkOption {
+        description = "Port advertised to reach this Mesos master.";
+        default = null;
+        type = types.nullOr types.int;
       };
 
       zk = mkOption {
@@ -40,12 +58,12 @@ in {
 
       extraCmdLineOptions = mkOption {
         description = ''
-	  Extra command line options for Mesos Master.
+          Extra command line options for Mesos Master.
 
-	  See https://mesos.apache.org/documentation/latest/configuration/
-	'';
+          See https://mesos.apache.org/documentation/latest/configuration/
+        '';
         default = [ "" ];
-        type = types.listOf types.string;
+        type = types.listOf types.str;
         example = [ "--credentials=VALUE" ];
       };
 
@@ -80,22 +98,26 @@ in {
     systemd.services.mesos-master = {
       description = "Mesos Master";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-interfaces.target" ];
+      after = [ "network.target" ];
       serviceConfig = {
-	ExecStart = ''
-	  ${pkgs.mesos}/bin/mesos-master \
-	    --port=${toString cfg.port} \
-	    --zk=${cfg.zk} \
-	    ${if cfg.quorum == 0 then "--registry=in_memory" else "--registry=replicated_log --quorum=${toString cfg.quorum}"} \
-	    --work_dir=${cfg.workDir} \
-	    --logging_level=${cfg.logLevel} \
-	    ${toString cfg.extraCmdLineOptions}
-	'';
-	Restart = "on-failure";
-	PermissionsStartOnly = true;
+        ExecStart = ''
+          ${pkgs.mesos}/bin/mesos-master \
+            --ip=${cfg.ip} \
+            --port=${toString cfg.port} \
+            ${optionalString (cfg.advertiseIp != null) "--advertise_ip=${cfg.advertiseIp}"} \
+            ${optionalString (cfg.advertisePort  != null) "--advertise_port=${toString cfg.advertisePort}"} \
+            ${if cfg.quorum == 0
+              then "--registry=in_memory"
+              else "--zk=${cfg.zk} --registry=replicated_log --quorum=${toString cfg.quorum}"} \
+            --work_dir=${cfg.workDir} \
+            --logging_level=${cfg.logLevel} \
+            ${toString cfg.extraCmdLineOptions}
+        '';
+        Restart = "on-failure";
+        PermissionsStartOnly = true;
       };
       preStart = ''
-	mkdir -m 0700 -p ${cfg.workDir}
+        mkdir -m 0700 -p ${cfg.workDir}
       '';
     };
   };

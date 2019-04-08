@@ -1,22 +1,29 @@
-{ stdenv, fetchurl, pkgconfig, ncurses, glib, openssl, perl, libintlOrEmpty }:
+{ stdenv, fetchurl, pkgconfig, ncurses, glib, openssl, perl, libintl }:
 
 stdenv.mkDerivation rec {
-  name = "irssi-0.8.17";
-  
+  version = "1.2.0";
+  name = "irssi-${version}";
+
   src = fetchurl {
-    url = "http://irssi.org/files/${name}.tar.bz2";
-    sha256 = "01v82q2pfiimx6lh271kdvgp8hl4pahc3srg04fqzxgdsb5015iw";
+    url = "https://github.com/irssi/irssi/releases/download/${version}/${name}.tar.gz";
+    sha256 = "1sp3fc5fkdx0mmllvag94xaifnqbj1k09nl235pix26vv1gzq39m";
   };
-  
-  buildInputs = [ pkgconfig ncurses glib openssl perl libintlOrEmpty ];
-  
-  NIX_LDFLAGS = "-lncurses";
-  
-  configureFlags = "--with-proxy --with-ncurses --enable-ssl --with-perl=yes";
+
+  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ ncurses glib openssl perl libintl ];
+
+  configureFlags = [
+    "--with-proxy"
+    "--with-bot"
+    "--with-perl=yes"
+    "--enable-true-color"
+  ];
 
   meta = {
-    homepage    = http://irssi.org;
+    homepage    = https://irssi.org;
+    description = "A terminal based IRC client";
     platforms   = stdenv.lib.platforms.unix;
     maintainers = with stdenv.lib.maintainers; [ lovek323 ];
+    license     = stdenv.lib.licenses.gpl2Plus;
   };
 }

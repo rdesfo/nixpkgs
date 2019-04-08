@@ -1,13 +1,13 @@
-import ./make-test.nix (
+import ./make-test.nix ({ pkgs, ...} : 
 
 let
 
   backend =
-    { config, pkgs, ... }:
+    { pkgs, ... }:
 
     { services.httpd.enable = true;
       services.httpd.adminAddr = "foo@example.org";
-      services.httpd.documentRoot = "${pkgs.valgrind}/share/doc/valgrind/html";
+      services.httpd.documentRoot = "${pkgs.valgrind.doc}/share/doc/valgrind/html";
       networking.firewall.allowedTCPPorts = [ 80 ];
     };
 
@@ -15,10 +15,13 @@ in
 
 {
   name = "proxy";
+  meta = with pkgs.stdenv.lib.maintainers; {
+    maintainers = [ eelco ];
+  };
 
   nodes =
     { proxy =
-        { config, pkgs, nodes, ... }:
+        { nodes, ... }:
 
         { services.httpd.enable = true;
           services.httpd.adminAddr = "bar@example.org";
@@ -54,7 +57,7 @@ in
       backend1 = backend;
       backend2 = backend;
 
-      client = { config, pkgs, ... }: { };
+      client = { ... }: { };
     };
 
   testScript =
@@ -64,6 +67,7 @@ in
       $proxy->waitForUnit("httpd");
       $backend1->waitForUnit("httpd");
       $backend2->waitForUnit("httpd");
+      $client->waitForUnit("network.target");
 
       # With the back-ends up, the proxy should work.
       $client->succeed("curl --fail http://proxy/");
@@ -89,5 +93,4 @@ in
       $backend2->unblock;
       $client->succeed("curl --fail http://proxy/");
     '';
-
 })

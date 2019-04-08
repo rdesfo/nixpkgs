@@ -1,14 +1,17 @@
-{ stdenv, fetchurl, pythonPackages }:
+{ stdenv, fetchFromGitHub, python2Packages }:
 
-pythonPackages.buildPythonPackage rec {
-  name = "s3cmd-1.5.2";
+python2Packages.buildPythonApplication rec {
+  name = "s3cmd-${version}";
+  version = "2.0.2";
   
-  src = fetchurl {
-    url = "mirror://sourceforge/s3tools/${name}.tar.gz";
-    sha256 = "0bdl2wvh4nri4n6hpaa8s9lk98xy4a1b0l9ym54fvmxxx1j6g2pz";
+  src = fetchFromGitHub {
+    owner  = "s3tools";
+    repo   = "s3cmd";
+    rev    = "v${version}";
+    sha256 = "0ninw830309cxga99gjnfghpkywf9kd6yz4wqsq85zni1dv39cdk";
   };
 
-  propagatedBuildInputs = with pythonPackages; [ python_magic dateutil ];
+  propagatedBuildInputs = with python2Packages; [ python_magic dateutil ];
 
   meta = with stdenv.lib; {
     homepage = http://s3tools.org/;

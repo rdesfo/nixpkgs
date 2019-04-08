@@ -1,24 +1,45 @@
-{ stdenv, fetchurl, unzip, buildPythonPackage, makeDesktopItem
-# mandatory
-, pyside
-# recommended
-, pyflakes ? null, rope ? null, sphinx ? null, numpy ? null, scipy ? null, matplotlib ? null
-# optional
-, ipython ? null, pylint ? null, pep8 ? null
-}:
+{ stdenv, python3, makeDesktopItem }:
 
-buildPythonPackage rec {
-  name = "spyder-2.2.5";
-  namePrefix = "";
+let
 
-  src = fetchurl {
-    url = "https://spyderlib.googlecode.com/files/${name}.zip";
-    sha256 = "1bxc5qs2bqc21s6kxljsfxnmwgrgnyjfr9mkwzg9njpqsran3bp2";
+  spyder-kernels = with python3.pkgs; buildPythonPackage rec {
+    pname = "spyder-kernels";
+    version = "0.4.2";
+
+    src = fetchPypi {
+      inherit pname version;
+      sha256 = "a13cefb569ef9f63814cb5fcf3d0db66e09d2d7e6cc68c703d5118b2d7ba062b";
+    };
+
+    propagatedBuildInputs = [
+      cloudpickle
+      ipykernel
+      wurlitzer
+    ];
+
+    # No tests
+    doCheck = false;
+
+    meta = {
+      description = "Jupyter kernels for Spyder's console";
+      homepage = https://github.com/spyder-ide/spyder-kernels;
+      license = stdenv.lib.licenses.mit;
+    };
   };
 
-  buildInputs = [ unzip ];
-  propagatedBuildInputs =
-    [ pyside pyflakes rope sphinx numpy scipy matplotlib ipython pylint pep8 ];
+in python3.pkgs.buildPythonApplication rec {
+  pname = "spyder";
+  version = "3.3.3";
+
+  src = python3.pkgs.fetchPypi {
+    inherit pname version;
+    sha256 = "ef31de03cf6f149077e64ed5736b8797dbd278e3c925e43f0bfc31bb55f6e5ba";
+  };
+
+  propagatedBuildInputs = with python3.pkgs; [
+    jedi pycodestyle psutil pyflakes rope numpy scipy matplotlib pylint keyring
+    numpydoc qtconsole qtawesome nbconvert mccabe pyopengl cloudpickle spyder-kernels
+  ];
 
   # There is no test for spyder
   doCheck = false;
@@ -35,11 +56,9 @@ buildPythonPackage rec {
 
   # Create desktop item
   postInstall = ''
-    mkdir -p $out/share/applications
-    cp $desktopItem/share/applications/* $out/share/applications/
-
     mkdir -p $out/share/icons
-    cp spyderlib/images/spyder.svg $out/share/icons/
+    cp spyder/images/spyder.svg $out/share/icons
+    cp -r $desktopItem/share/applications/ $out/share
   '';
 
   meta = with stdenv.lib; {
@@ -49,9 +68,8 @@ buildPythonPackage rec {
       environment for the Python language with advanced editing, interactive
       testing, debugging and introspection features.
     '';
-    homepage = https://code.google.com/p/spyderlib/;
+    homepage = https://github.com/spyder-ide/spyder/;
     license = licenses.mit;
     platforms = platforms.linux;
-    maintainers = [ maintainers.bjornfor ];
   };
 }

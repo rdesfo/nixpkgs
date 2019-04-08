@@ -1,37 +1,44 @@
-{ stdenv, fetchurl, pkgconfig, intltool, alsaLib, pulseaudio, speex, gsm
-, libopus, ffmpeg, libX11, libXv, mesa, glew, libtheora, libvpx, SDL, libupnp
-, ortp, libv4l, libpcap, srtp, vim
+{ stdenv, pkgconfig, intltool, alsaLib, libpulseaudio, speex, gsm
+, libopus, ffmpeg, libX11, libXv, libGLU_combined, glew, libtheora, libvpx, SDL, libupnp
+, ortp, libv4l, libpcap, srtp, fetchFromGitHub, cmake, bctoolbox, doxygen
+, python, libXext, libmatroska, openssl, fetchpatch
 }:
 
 stdenv.mkDerivation rec {
-  name = "mediastreamer-2.11.1";
+  baseName = "mediastreamer2";
+  version = "2.16.1";
+  name = "${baseName}-${version}";
 
-  src = fetchurl {
-    url = "mirror://savannah/linphone/mediastreamer/${name}.tar.gz";
-    sha256 = "0gfv4k2rsyvyq838xjgsrxmmn0fkw40apqs8vakzjwzsz2c9z8pd";
+  src = fetchFromGitHub {
+    owner = "BelledonneCommunications";
+    repo = "${baseName}";
+    rev = "${version}";
+    sha256 = "02745bzl2r1jqvdqzyv94fjd4w92zr976la4c4nfvsy52waqah7j";
   };
 
-  postPatch = ''
-    sed -i "s/\(SRTP_LIBS=\"\$SRTP_LIBS -lsrtp\"\)/SRTP_LIBS=\"$(pkg-config --libs-only-l libsrtp)\"/g" configure
-  '';
+  patches = [
+    (fetchpatch {
+      name = "allow-build-without-git.patch";
+      url = "https://github.com/BelledonneCommunications/mediastreamer2/commit/de3a24b795d7a78e78eab6b974e7ec5abf2259ac.patch";
+      sha256 = "1zqkrab42n4dha0knfsyj4q0wc229ma125gk9grj67ps7r7ipscy";
+    })
+    ./plugins_dir.patch
+  ];
 
-  # TODO: make it load plugins from *_PLUGIN_PATH
-  nativeBuildInputs = [ pkgconfig intltool ];
+  nativeBuildInputs = [ pkgconfig intltool cmake doxygen python ];
 
   propagatedBuildInputs = [
-    alsaLib pulseaudio speex gsm libopus
-    ffmpeg libX11 libXv mesa glew libtheora libvpx SDL libupnp
-    ortp libv4l libpcap srtp
-    vim
+    alsaLib libpulseaudio speex gsm libopus
+    ffmpeg libX11 libXv libGLU_combined glew libtheora libvpx SDL libupnp
+    ortp libv4l libpcap srtp bctoolbox libXext libmatroska
+    openssl
   ];
 
-  configureFlags = [
-    "--enable-external-ortp"
-    "--with-srtp=${srtp}"
-  ];
+  NIX_CFLAGS_COMPILE = " -DGIT_VERSION=\"v2.14.0\" -Wno-error=deprecated-declarations ";
+  NIX_LDFLAGS = " -lXext -lssl ";
 
   meta = with stdenv.lib; {
-    description = "a powerful and lightweight streaming engine specialized for voice/video telephony applications";
+    description = "A powerful and lightweight streaming engine specialized for voice/video telephony applications";
     homepage = http://www.linphone.org/technical-corner/mediastreamer2/overview;
     license = licenses.gpl2;
     platforms = platforms.linux;

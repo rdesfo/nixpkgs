@@ -1,42 +1,45 @@
-{ stdenv, fetchurl, gettext, libidn
-, perl, perlPackages, LWP, python3
-, libiconv, gnutls ? null }:
+{ stdenv, fetchurl, gettext, pkgconfig, perlPackages
+, libidn2, zlib, pcre, libuuid, libiconv, libintl
+, python3, lzip
+, libpsl ? null
+, openssl ? null }:
 
 stdenv.mkDerivation rec {
-  name = "wget-1.16";
+  name = "wget-${version}";
+  version = "1.20.3";
 
   src = fetchurl {
-    url = "mirror://gnu/wget/${name}.tar.xz";
-    sha256 = "1rxhr3jmgbwryzl51di4avqxw9m9j1z2aak8q1npns0p184xsqcj";
+    url = "mirror://gnu/wget/${name}.tar.lz";
+    sha256 = "1frajd86ds8vz2hprq30wq8ya89z9dcxnwm8nwk12bbc47l7qq39";
   };
 
-  preConfigure = stdenv.lib.optionalString doCheck
-    '' for i in "doc/texi2pod.pl" "util/rmold.pl"
-       do
-         sed -i "$i" -e 's|/usr/bin.*perl|${perl}/bin/perl|g'
-       done
+  patches = [
+    ./remove-runtime-dep-on-openssl-headers.patch
+  ];
 
-       # Work around lack of DNS resolution in chroots.
-       for i in "tests/"*.pm "tests/"*.px
-       do
-         sed -i "$i" -e's/localhost/127.0.0.1/g'
-       done
-    '' + stdenv.lib.optionalString stdenv.isDarwin ''
-       export LIBS="-liconv -lintl"
-    '';
+  preConfigure = ''
+    patchShebangs doc
 
-  nativeBuildInputs = [ gettext ];
-  buildInputs = [ libidn libiconv ]
-    ++ stdenv.lib.optionals doCheck [ perl perlPackages.IOSocketSSL LWP python3 ]
-    ++ stdenv.lib.optional (gnutls != null) gnutls
-    ++ stdenv.lib.optional stdenv.isDarwin perl;
+  '' + stdenv.lib.optionalString doCheck ''
+    # Work around lack of DNS resolution in chroots.
+    for i in "tests/"*.pm "tests/"*.px
+    do
+      sed -i "$i" -e's/localhost/127.0.0.1/g'
+    done
+  '';
 
-  configureFlags =
-    if gnutls != null
-    then "--with-ssl=gnutls"
-    else "--without-ssl";
+  nativeBuildInputs = [ gettext pkgconfig perlPackages.perl lzip libiconv libintl ];
+  buildInputs = [ libidn2 zlib pcre libuuid ]
+    ++ stdenv.lib.optionals doCheck [ perlPackages.IOSocketSSL perlPackages.LWP python3 ]
+    ++ stdenv.lib.optional (openssl != null) openssl
+    ++ stdenv.lib.optional (libpsl != null) libpsl
+    ++ stdenv.lib.optional stdenv.isDarwin perlPackages.perl;
 
-  doCheck = (perl != null && python3 != null && !stdenv.isDarwin);
+  configureFlags = [
+    (stdenv.lib.withFeatureAs (openssl != null) "ssl" "openssl")
+  ];
+
+  doCheck = false;
 
   meta = with stdenv.lib; {
     description = "Tool for retrieving files using HTTP, HTTPS, and FTP";
@@ -50,7 +53,7 @@ stdenv.mkDerivation rec {
 
     license = licenses.gpl3Plus;
 
-    homepage = http://www.gnu.org/software/wget/;
+    homepage = https://www.gnu.org/software/wget/;
 
     maintainers = with maintainers; [ fpletz ];
     platforms = platforms.all;

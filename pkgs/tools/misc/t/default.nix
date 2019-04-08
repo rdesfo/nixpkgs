@@ -1,7 +1,7 @@
-{ stdenv, lib, bundlerEnv, ruby }:
+{ lib, bundlerEnv, ruby }:
 
 bundlerEnv {
-  name = "t-2.9.0";
+  name = "t-3.1.0";
 
   inherit ruby;
   gemfile = ./Gemfile;
@@ -9,9 +9,9 @@ bundlerEnv {
   gemset = ./gemset.nix;
 
   meta = with lib; {
-    description = "A command-line power tool for Twitter.";
+    description = "A command-line power tool for Twitter";
     homepage    = http://sferik.github.io/t/;
-    license     = with licenses; asl20;
+    license     = licenses.asl20;
     maintainers = with maintainers; [ offline ];
     platforms   = platforms.unix;
   };

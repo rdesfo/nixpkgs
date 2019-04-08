@@ -39,6 +39,7 @@ in {
       package = mkOption {
         type = types.package;
         default = pkgs.syslogng;
+        defaultText = "pkgs.syslogng";
         description = ''
           The package providing syslog-ng binaries.
         '';
@@ -84,9 +85,11 @@ in {
       after = [ "multi-user.target" ]; # makes sure hostname etc is set
       serviceConfig = {
         Type = "notify";
+        PIDFile = pidFile;
         StandardOutput = "null";
         Restart = "on-failure";
         ExecStart = "${cfg.package}/sbin/syslog-ng ${concatStringsSep " " syslogngOptions}";
+        ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
       };
     };
   };

@@ -1,96 +1,80 @@
-{ stdenv, fetchurl, cabal, swiProlog, either, mtl, syb
-, glibcLocales, makeWrapper, rlwrap, tk, which }:
+{ stdenv, fetchurl, makeWrapper
+, haskellPackages, haskell
+, which, swiProlog, rlwrap, tk
+, curl, git, unzip, gnutar, coreutils, sqlite }:
 
 let
-  fname = "pakcs-1.11.4";
+  name = "pakcs-2.1.1";
 
-  fsrc = fetchurl {
-    url = "http://www.informatik.uni-kiel.de/~pakcs/download/${fname}-src.tar.gz";
-    sha256 = "1xsn8h58pi1jp8wr4abyrqdps840j8limyv5i812z49npf91fy5c";
+  # Don't switch to development release without a reason, because its
+  # source updates without version bump. Prefer current release instead.
+  src = fetchurl {
+    url = "https://www.informatik.uni-kiel.de/~pakcs/download/${name}-src.tar.gz";
+    sha256 = "112v9ynqfbbm4x770mcfrai9v5bh7c3zn7jka80pv6v4y65r778c";
   };
 
-in
-stdenv.mkDerivation rec {
+  curry-frontend = (haskellPackages.override {
+    overrides = self: super: {
+      curry-base = haskell.lib.overrideCabal (super.callPackage ./curry-base.nix {}) (drv: {
+        inherit src;
+        postUnpack = "sourceRoot+=/frontend/curry-base";
+      });
+      curry-frontend = haskell.lib.overrideCabal (super.callPackage ./curry-frontend.nix {}) (drv: {
+        inherit src;
+        postUnpack = "sourceRoot+=/frontend/curry-frontend";
+      });
+    };
+  }).curry-frontend;
+in stdenv.mkDerivation {
+  inherit name src;
 
-  name = fname;
+  buildInputs = [ swiProlog ];
+  nativeBuildInputs = [ which makeWrapper ];
 
-  curryBase = cabal.mkDerivation(self: {
-    pname = "curryBase";
-    version = "local";
-    src = fsrc;
-    sourceRoot = "${name}/frontend/curry-base";
-    isLibrary = true;
-    buildDepends = [ mtl syb ];
-  });
+  makeFlags = [
+    "CURRYFRONTEND=${curry-frontend}/bin/curry-frontend"
+    "DISTPKGINSTALL=yes"
+    # Not needed, just to make script pass
+    "CURRYTOOLSDIR=0"
+    "CURRYLIBSDIR=0"
+  ];
 
-  curryFront = cabal.mkDerivation(self: {
-    pname = "curryFront";
-    version = "local";
-    src = fsrc;
-    sourceRoot = "${name}/frontend/curry-frontend";
-    isLibrary = true;
-    isExecutable = true;
-    buildDepends = [ either mtl syb curryBase ];
-  });
+  preConfigure = ''
+    # Since we can't expand $out in `makeFlags`
+    #makeFlags="$makeFlags PAKCSINSTALLDIR=$out/pakcs"
 
-  src = fsrc;
-
-  buildInputs = [ swiProlog makeWrapper glibcLocales rlwrap tk which ];
-
-  patches = [ ./adjust-buildsystem.patch ];
-
-  configurePhase = ''
-    # Phony HOME.
-    mkdir phony-home
-    export HOME=$(pwd)/phony-home
-
-    # SWI Prolog
-    sed -i 's@SWIPROLOG=@SWIPROLOG='${swiProlog}/bin/swipl'@' pakcsinitrc
+    substituteInPlace currytools/cpm/src/CPM/Repository.curry \
+      --replace "/bin/rm" "rm"
   '';
 
+  # cypm new: EXISTENCE ERROR: source_sink
+  # "/tmp/nix-build-pakcs-2.0.2.drv-0/pakcs-2.0.2/currytools/cpm/templates/LICENSE"
+  # does not exist
   buildPhase = ''
-    # Some comments in files are in UTF-8, so include the locale needed by GHC runtime.
-    export LC_ALL=en_US.UTF-8
-
-    # PAKCS must be build in place due to embedded filesystem references placed by swi.
-
-    # Prepare PAKCSHOME directory.
-    mkdir -p $out/pakcs/bin
-
-    # Set up link to cymake, which has been built already.
-    ln -s ${curryFront}/bin/cymake $out/pakcs/bin/
-
-    # Prevent embedding the derivation build directory as temp.
-    export TEMP=/tmp
-
-    # Copy to in place build location and run the build.
+    mkdir -p $out/pakcs
     cp -r * $out/pakcs
-    (cd $out/pakcs ; make)
+    (cd $out/pakcs ; make -j$NIX_BUILD_CORES $makeFlags)
   '';
 
   installPhase = ''
-    # Install bin.
-    mkdir -p $out/bin
-    for b in $(ls $out/pakcs/bin) ; do
-      ln -s $out/pakcs/bin/$b $out/bin/ ;
-    done
+    ln -s $out/pakcs/bin $out
 
-    # Place emacs lisp files in expected locations.
-    mkdir -p $out/share/emacs/site-lisp/curry-pakcs
-    for e in "$out/tools/emacs/"*.el ; do
-      cp $e $out/share/emacs/site-lisp/curry-pakcs/ ;
-    done
+    mkdir -p $out/share/emacs/site-lisp
+    ln -s $out/pakcs/tools/emacs $out/share/emacs/site-lisp/curry-pakcs
 
-    # Wrap for rlwrap and tk support.
     wrapProgram $out/pakcs/bin/pakcs \
       --prefix PATH ":" "${rlwrap}/bin" \
-      --prefix PATH ":" "${tk}/bin" \
+      --prefix PATH ":" "${tk}/bin"
+
+    # List of dependencies from currytools/cpm/src/CPM/Main.curry
+    wrapProgram $out/pakcs/bin/cypm \
+      --prefix PATH ":" "${stdenv.lib.makeBinPath [ curl git unzip gnutar coreutils sqlite ]}"
   '';
 
-  meta = {
-    homepage = "http://www.informatik.uni-kiel.de/~pakcs/";
+  meta = with stdenv.lib; {
+    homepage = http://www.informatik.uni-kiel.de/~pakcs/;
     description = "An implementation of the multi-paradigm declarative language Curry";
-    license = stdenv.lib.licenses.bsd3;
+    license = licenses.bsd3;
 
     longDescription = ''
       PAKCS is an implementation of the multi-paradigm declarative language
@@ -104,8 +88,7 @@ stdenv.mkDerivation rec {
       with dynamic web pages, prototyping embedded systems).
     '';
 
-    maintainers = [ stdenv.lib.maintainers.kkallio ];
-    platforms = stdenv.lib.platforms.linux;
-    hydraPlatforms = stdenv.lib.platforms.none;
+    maintainers = with maintainers; [ kkallio gnidorah ];
+    platforms = platforms.linux;
   };
 }

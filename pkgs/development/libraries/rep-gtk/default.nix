@@ -1,17 +1,19 @@
-{ stdenv, fetchgit, pkgconfig, autoreconfHook, librep, gtk2 }:
+{ stdenv, fetchurl, pkgconfig, autoreconfHook, librep, gtk2 }:
 
 with stdenv.lib;
 stdenv.mkDerivation rec {
 
-  name = "rep-gtk-git-2015-02-15";
+  name = "rep-gtk-${version}";
+  version = "0.90.8.3";
+  sourceName = "rep-gtk_${version}";
 
-  src = fetchgit {
-    url = "https://github.com/SawfishWM/rep-gtk.git";
-    rev = "74ac3504f2bbbcc9ded005ab97cbf94cdc47924d";
-    sha256 = "edb47c5b6d09201d16a8f0616d18690ff0a37dca56d31c6e635b286bd0b6a031";
+  src = fetchurl {
+    url = "https://download.tuxfamily.org/librep/rep-gtk/${sourceName}.tar.xz";
+    sha256 = "0hgkkywm8zczir3lqr727bn7ybgg71x9cwj1av8fykkr8pdpard9";
   };
 
-  buildInputs = [ pkgconfig autoreconfHook ];
+  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  buildInputs = [ ];
   propagatedBuildInputs = [ librep gtk2 ];
 
   patchPhase = ''
@@ -25,3 +27,4 @@ stdenv.mkDerivation rec {
     maintainers = [ maintainers.AndersonTorres ];
   };
 }
+# TODO: investigate fetchFromGithub

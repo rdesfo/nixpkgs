@@ -1,22 +1,22 @@
-{ stdenv, fetchurl
+{ config, stdenv, fetchurl
 , libX11, wxGTK
 , libiconv, fontconfig, freetype
-, mesa
+, libGLU_combined
 , libass, fftw, ffms
 , ffmpeg, pkgconfig, zlib # Undocumented (?) dependencies
 , icu, boost, intltool # New dependencies
 , spellcheckSupport ? true, hunspell ? null
 , automationSupport ? true, lua ? null
 , openalSupport ? false, openal ? null
-, alsaSupport ? true, alsaLib ? null
-, pulseaudioSupport ? true, pulseaudio ? null
+, alsaSupport ? stdenv.isLinux, alsaLib ? null
+, pulseaudioSupport ? config.pulseaudio or stdenv.isLinux, libpulseaudio ? null
 , portaudioSupport ? false, portaudio ? null }:
 
 assert spellcheckSupport -> (hunspell != null);
 assert automationSupport -> (lua != null);
 assert openalSupport -> (openal != null);
 assert alsaSupport -> (alsaLib != null);
-assert pulseaudioSupport -> (pulseaudio != null);
+assert pulseaudioSupport -> (libpulseaudio != null);
 assert portaudioSupport -> (portaudio != null);
 
 with stdenv.lib;
@@ -29,19 +29,30 @@ stdenv.mkDerivation rec {
     sha256 = "11b83qazc8h0iidyj1rprnnjdivj1lpphvpa08y53n42bfa36pn5";
   };
 
+  # Fixup build with icu-59
+  postPatch = "sed '1i#include <unicode/unistr.h>' -i src/utils.cpp";
+
   buildInputs = with stdenv.lib;
-  [ pkgconfig intltool libX11 wxGTK fontconfig freetype mesa
-    libass fftw ffms ffmpeg zlib icu boost boost.lib libiconv
+  [ pkgconfig intltool libX11 wxGTK fontconfig freetype libGLU_combined
+    libass fftw ffms ffmpeg zlib icu boost boost.out libiconv
   ]
     ++ optional spellcheckSupport hunspell
     ++ optional automationSupport lua
     ++ optional openalSupport openal
     ++ optional alsaSupport alsaLib
-    ++ optional pulseaudioSupport pulseaudio
+    ++ optional pulseaudioSupport libpulseaudio
     ++ optional portaudioSupport portaudio
     ;
 
   enableParallelBuilding = true;
+
+  hardeningDisable = [ "bindnow" "relro" ];
+
+  # this is fixed upstream though not yet in an officially released version,
+  # should be fine remove on next release (if one ever happens)
+  NIX_LDFLAGS = [
+    "-lpthread"
+  ];
 
   postInstall = "ln -s $out/bin/aegisub-* $out/bin/aegisub";
 
@@ -59,6 +70,6 @@ stdenv.mkDerivation rec {
               # but they are linked against GPL'd softwares
               # - so the resulting program will be GPL
     maintainers = [ maintainers.AndersonTorres ];
-    platforms = platforms.linux;
+    platforms = [ "i686-linux" "x86_64-linux" ];
   };
 }

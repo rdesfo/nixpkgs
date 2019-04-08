@@ -1,26 +1,41 @@
-{ stdenv, fetchFromGitHub, valgrind }:
+{ stdenv, fetchFromGitHub, valgrind
+, enableStatic ? false, enableShared ? true
+}:
 
-let version = "128"; in
 stdenv.mkDerivation rec {
   name = "lz4-${version}";
+  version = "1.8.3";
 
   src = fetchFromGitHub {
-    sha256 = "00jrnic2jddj81av8jjipf4rdkx6x6cdf8zpsz3mp5kbmqzd0h9a";
-    rev = "r${version}";
+    sha256 = "0lq00yi7alr9aip6dw0flykzi8yv7z43aay177n86spn9qms7s3g";
+    rev = "v${version}";
     repo = "lz4";
-    owner = "Cyan4973";
+    owner = "lz4";
   };
 
-  # valgrind is required only by `make test`
-  buildInputs = [ valgrind ];
+  outputs = [ "out" "dev" ];
+
+  buildInputs = stdenv.lib.optional doCheck valgrind;
 
   enableParallelBuilding = true;
 
-  makeFlags = "PREFIX=$(out)";
+  makeFlags = [
+    "PREFIX=$(out)"
+    "INCLUDEDIR=$(dev)/include"
+    # TODO do this instead
+    #"BUILD_STATIC=${if enableStatic then "yes" else "no"}"
+    #"BUILD_SHARED=${if enableShared then "yes" else "no"}"
+  ]
+    # TODO delete and do above
+    ++ stdenv.lib.optional (enableStatic) "BUILD_STATIC=yes"
+    ++ stdenv.lib.optional (!enableShared) "BUILD_SHARED=no"
+    ;
 
-  doCheck = true;
+  doCheck = false; # tests take a very long time
   checkTarget = "test";
-  checkFlags = "-j1"; # required since version 128
+
+  # TODO remove
+  postInstall = stdenv.lib.optionalString (!enableStatic) "rm $out/lib/*.a";
 
   meta = with stdenv.lib; {
     description = "Extremely fast compression algorithm";
@@ -31,9 +46,8 @@ stdenv.mkDerivation rec {
       multiple GB/s per core, typically reaching RAM speed limits on
       multi-core systems.
     '';
-    homepage = https://code.google.com/p/lz4/;
+    homepage = https://lz4.github.io/lz4/;
     license = with licenses; [ bsd2 gpl2Plus ];
-    platforms = with platforms; linux;
-    maintainers = with maintainers; [ nckx ];
+    platforms = platforms.unix;
   };
 }

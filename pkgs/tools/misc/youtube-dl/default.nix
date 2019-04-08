@@ -1,32 +1,57 @@
-{ stdenv, fetchurl, makeWrapper, python, zip, pandoc, ffmpeg }:
+{ lib, fetchurl, buildPythonPackage
+, zip, ffmpeg_4, rtmpdump, phantomjs2, atomicparsley, pycryptodome, pandoc
+, fetchpatch
+# Pandoc is required to build the package's man page. Release tarballs contain a
+# formatted man page already, though, it will still be installed. We keep the
+# manpage argument in place in case someone wants to use this derivation to
+# build a Git version of the tool that doesn't have the formatted man page
+# included.
+, generateManPage ? false
+, ffmpegSupport ? true
+, rtmpSupport ? true
+, phantomjsSupport ? false
+, hlsEncryptedSupport ? true
+, makeWrapper }:
 
-with stdenv.lib;
-stdenv.mkDerivation rec {
-  name = "youtube-dl-${version}";
-  version = "2015.04.03";
+buildPythonPackage rec {
+
+  pname = "youtube-dl";
+  # The websites youtube-dl deals with are a very moving target. That means that
+  # downloads break constantly. Because of that, updates should always be backported
+  # to the latest stable release.
+  version = "2019.04.07";
 
   src = fetchurl {
-    url = "http://youtube-dl.org/downloads/${version}/${name}.tar.gz";
-    sha256 = "0ndzswv6vq5ld5p1ny23sh76cx6acf8yli9gi9r21dm94ida2885";
+    url = "https://yt-dl.org/downloads/${version}/${pname}-${version}.tar.gz";
+    sha256 = "1krx4y8nzpaqpq9qs8dnv2y988jpdccyfl9sdx9wrb0baycl119k";
   };
 
-  buildInputs = [ python makeWrapper zip pandoc ];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ zip ] ++ lib.optional generateManPage pandoc;
+  propagatedBuildInputs = lib.optional hlsEncryptedSupport pycryptodome;
 
-  patchPhase = ''
-    rm youtube-dl
-  '';
-
-  configurePhase = ''
-    makeFlagsArray=( PREFIX=$out SYSCONFDIR=$out/etc PYTHON=${python}/bin/python )
-  '';
+  # Ensure these utilities are available in $PATH:
+  # - ffmpeg: post-processing & transcoding support
+  # - rtmpdump: download files over RTMP
+  # - atomicparsley: embedding thumbnails
+  makeWrapperArgs = let
+      packagesToBinPath =
+        [ atomicparsley ]
+        ++ lib.optional ffmpegSupport ffmpeg_4
+        ++ lib.optional rtmpSupport rtmpdump
+        ++ lib.optional phantomjsSupport phantomjs2;
+    in [ ''--prefix PATH : "${lib.makeBinPath packagesToBinPath}"'' ];
 
   postInstall = ''
-    # ffmpeg is used for post-processing and fixups
-    wrapProgram $out/bin/youtube-dl --prefix PATH : "${ffmpeg}/bin"
+    mkdir -p $out/share/zsh/site-functions
+    cp youtube-dl.zsh $out/share/zsh/site-functions/_youtube-dl
   '';
 
-  meta = {
-    homepage = "http://rg3.github.com/youtube-dl/";
+  # Requires network
+  doCheck = false;
+
+  meta = with lib; {
+    homepage = https://rg3.github.io/youtube-dl/;
     repositories.git = https://github.com/rg3/youtube-dl.git;
     description = "Command-line tool to download videos from YouTube.com and other sites";
     longDescription = ''
@@ -37,6 +62,6 @@ stdenv.mkDerivation rec {
     '';
     license = licenses.publicDomain;
     platforms = with platforms; linux ++ darwin;
-    maintainers = with maintainers; [ bluescreen303 simons phreedom AndersonTorres fuuzetsu ];
+    maintainers = with maintainers; [ bluescreen303 phreedom AndersonTorres fuuzetsu fpletz enzime ];
   };
 }

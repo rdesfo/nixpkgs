@@ -1,37 +1,48 @@
-{ writeTextFile, stdenv, ruby } : { env, runScript } :
+{ callPackage, runCommand, writeScript, stdenv, coreutils }:
+
+let buildFHSEnv = callPackage ./env.nix { }; in
+
+args@{ name, runScript ? "bash", extraInstallCommands ? "", meta ? {}, passthru ? {}, ... }:
 
 let
-  name = env.pname;
+  env = buildFHSEnv (removeAttrs args [ "runScript" "extraInstallCommands" "meta" "passthru" ]);
 
-  # Sandboxing script
-  chroot-user = writeTextFile {
-    name = "chroot-user";
-    executable = true;
-    destination = "/bin/chroot-user";
-    text = ''
-      #! ${ruby}/bin/ruby
-      ${builtins.readFile ./chroot-user.rb}
+  chrootenv = callPackage ./chrootenv {};
+
+  init = run: writeScript "${name}-init" ''
+    #! ${stdenv.shell}
+    for i in ${env}/* /host/*; do
+      path="/''${i##*/}"
+      [ -e "$path" ] || ${coreutils}/bin/ln -s "$i" "$path"
+    done
+
+    [ -d "$1" ] && [ -r "$1" ] && cd "$1"
+    shift
+
+    source /etc/profile
+    exec ${run} "$@"
+  '';
+
+in runCommand name {
+  inherit meta;
+  passthru = passthru // {
+    env = runCommand "${name}-shell-env" {
+      shellHook = ''
+        exec ${chrootenv}/bin/chrootenv ${init runScript} "$(pwd)"
+      '';
+    } ''
+      echo >&2 ""
+      echo >&2 "*** User chroot 'env' attributes are intended for interactive nix-shell sessions, not for building! ***"
+      echo >&2 ""
+      exit 1
     '';
   };
-
-in stdenv.mkDerivation {
-  name = "${name}-userenv";
-  buildInputs = [ ruby ];
-  preferLocalBuild = true;
-  buildCommand = ''
-    mkdir -p $out/bin
-    cat > $out/bin/${name} <<EOF
-    #! ${stdenv.shell}
-    exec ${chroot-user}/bin/chroot-user ${env} $out/libexec/run "\$@"
-    EOF
-    chmod +x $out/bin/${name}
-
-    mkdir -p $out/libexec
-    cat > $out/libexec/run <<EOF
-    #! ${stdenv.shell}
-    source /etc/profile
-    ${runScript} "\$@"
-    EOF
-    chmod +x $out/libexec/run
-  '';
-}
+} ''
+  mkdir -p $out/bin
+  cat <<EOF >$out/bin/${name}
+  #! ${stdenv.shell}
+  exec ${chrootenv}/bin/chrootenv ${init runScript} "\$(pwd)" "\$@"
+  EOF
+  chmod +x $out/bin/${name}
+  ${extraInstallCommands}
+''

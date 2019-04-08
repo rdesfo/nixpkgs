@@ -3,7 +3,7 @@
 with stdenv.lib;
 
 stdenv.mkDerivation rec {
-  name = "dmenu2";
+  name = "dmenu2-0.3pre-2014-07-08";
 
   src = fetchhg {
     url = "https://bitbucket.org/melek/dmenu2";
@@ -22,8 +22,8 @@ stdenv.mkDerivation rec {
   meta = {
       description = "A patched fork of the original dmenu - an efficient dynamic menu for X";
       homepage = https://bitbucket.org/melek/dmenu2;
-      license = stdenv.lib.licenses.mit;
-      maintainers = with maintainers; [ cstrahan ];
-      platforms = with platforms; all;
+      license = licenses.mit;
+      maintainers = [ maintainers.cstrahan ];
+      platforms = platforms.all;
   };
 }

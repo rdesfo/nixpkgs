@@ -1,30 +1,35 @@
-{ stdenv, fetchurl, unzip }:
+{ stdenv, fetchFromGitHub, gtk3, numix-icon-theme }:
 
 stdenv.mkDerivation rec {
-  version = "d7e8c4cdcf";
+  pname = "numix-icon-theme-circle";
+  version = "19.02.22";
 
-  package-name = "numix-icon-theme-circle";
-  
-  name = "${package-name}-20150304";
-
-  buildInputs = [ unzip ];
-  
-  src = fetchurl {
-    url = "https://github.com/numixproject/${package-name}/archive/${version}.zip";
-    sha256 = "672d6f4d000c4c75a64e0297f9609afab1035d082d7ab4f7abe3e2173cba9324";
+  src = fetchFromGitHub {
+    owner = "numixproject";
+    repo = pname;
+    rev = version;
+    sha256 = "10jh633rllp9yjfkjjyf8455n84q7ppxw1kk9dp1rsg4dq327ks7";
   };
 
-  dontBuild = true;
+  nativeBuildInputs = [ gtk3 numix-icon-theme ];
 
   installPhase = ''
     install -dm 755 $out/share/icons
     cp -dr --no-preserve='ownership' Numix-Circle{,-Light} $out/share/icons/
   '';
-  
-  meta = {
+
+  postFixup = ''
+    for theme in $out/share/icons/*; do
+      gtk-update-icon-cache $theme
+    done
+  '';
+
+  meta = with stdenv.lib; {
     description = "Numix icon theme (circle version)";
-    homepage = https://numixproject.org;
-    license = stdenv.lib.licenses.gpl3;
-    platforms = stdenv.lib.platforms.all;
+    homepage = https://numixproject.github.io;
+    license = licenses.gpl3;
+    # darwin cannot deal with file names differing only in case
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ ];
   };
 }

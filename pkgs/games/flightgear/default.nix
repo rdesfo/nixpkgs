@@ -1,22 +1,37 @@
-{ stdenv, fetchurl
-, freeglut, freealut, mesa, libICE, libjpeg, openal, openscenegraph, plib
-, libSM, libunwind, libX11, xproto, libXext, xextproto, libXi, inputproto
+{ stdenv, fetchurl, makeWrapper
+, freeglut, freealut, libGLU_combined, libICE, libjpeg, openal, openscenegraph, plib
+, libSM, libunwind, libX11, xorgproto, libXext, libXi
 , libXmu, libXt, simgear, zlib, boost, cmake, libpng, udev, fltk13, apr
-, makeDesktopItem, qt5
+, makeDesktopItem, qtbase, qtdeclarative, glew
 }:
 
+let
+  version = "2018.2.2";
+  shortVersion = "2018.2";
+  data = stdenv.mkDerivation rec {
+    name = "flightgear-base-${version}";
+
+    src = fetchurl {
+      url = "mirror://sourceforge/flightgear/release-${shortVersion}/FlightGear-${version}-data.tar.bz2";
+      sha256 = "c89b94e4cf3cb7eda728daf6cca6dd051f7a47863776c99fd2f3fe0054400ac4";
+    };
+
+    phases = [ "installPhase" ];
+
+    installPhase = ''
+      mkdir -p "$out/share/FlightGear"
+      tar xf "${src}" -C "$out/share/FlightGear/" --strip-components=1
+    '';
+  };
+in
 stdenv.mkDerivation rec {
-  version = "3.4.0";
   name = "flightgear-${version}";
+   # inheriting data for `nix-prefetch-url -A pkgs.flightgear.data.src`
+  inherit version data;
 
   src = fetchurl {
-    url = "http://ftp.igh.cnrs.fr/pub/flightgear/ftp/Source/${name}.tar.bz2";
-    sha256 = "102pg7mahgxzypvyp76x363qy3a4gxavr4hj16gsha07nl2msr5m";
-  };
-
-  datasrc = fetchurl {
-    url = "http://ftp.igh.cnrs.fr/pub/flightgear/ftp/Shared/FlightGear-data-${version}.tar.bz2";
-    sha256 = "12qjvycizg693g5jj5qyp1jiwwywg6p9fg6j3zjxhx6r4g1sgvwc";
+    url = "mirror://sourceforge/flightgear/release-${shortVersion}/${name}.tar.bz2";
+    sha256 = "61f809ef0a3f6908d156f0c483ed5313d31b5a6ac74761955d0b266751718147";
   };
 
   # Of all the files in the source and data archives, there doesn't seem to be
@@ -37,22 +52,24 @@ stdenv.mkDerivation rec {
   };
 
   buildInputs = [
-    freeglut freealut mesa libICE libjpeg openal openscenegraph plib
-    libSM libunwind libX11 xproto libXext xextproto libXi inputproto
-    libXmu libXt simgear zlib boost cmake libpng udev fltk13 apr qt5
+    makeWrapper
+    freeglut freealut libGLU_combined libICE libjpeg openal openscenegraph plib
+    libSM libunwind libX11 xorgproto libXext libXi
+    libXmu libXt simgear zlib boost cmake libpng udev fltk13 apr qtbase
+    glew qtdeclarative
   ];
-
-  preConfigure = ''
-    export cmakeFlagsArray=(-DFG_DATA_DIR="$out/share/FlightGear/")
-  '';
 
   postInstall = ''
     mkdir -p "$out/share/applications/"
-    cp "${desktopItem}"/share/applications/* "$out/share/applications/"
+    cp "${desktopItem}"/share/applications/* "$out/share/applications/" #*/
 
-    mkdir -p "$out/share/FlightGear"
-    tar xvf "${datasrc}" -C "$out/share/FlightGear/" --strip-components=1
+    for f in $out/bin/* #*/
+    do
+      wrapProgram $f --set FG_ROOT "${data}/share/FlightGear"
+    done
   '';
+
+  enableParallelBuilding = true;
 
   meta = with stdenv.lib; {
     description = "Flight simulator";

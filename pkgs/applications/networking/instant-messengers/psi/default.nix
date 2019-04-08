@@ -1,6 +1,6 @@
-{ stdenv, fetchurl, aspell, qt4, zlib, sox, libX11, xproto, libSM
-, libICE, qca2, pkgconfig, liboil, speex, callPackage, which, glib
-, libXScrnSaver, scrnsaverproto
+{ stdenv, fetchurl, enchant, qt4, zlib, sox, libX11, xorgproto, libSM
+, libICE, qca2, pkgconfig, which, glib
+, libXScrnSaver
 }:
 
 stdenv.mkDerivation rec {
@@ -12,31 +12,20 @@ stdenv.mkDerivation rec {
   };
 
   buildInputs =
-    [ aspell qt4 zlib sox libX11 xproto libSM libICE
-      qca2 pkgconfig which glib scrnsaverproto libXScrnSaver
+    [ enchant qt4 zlib sox libX11 xorgproto libSM libICE
+      qca2 pkgconfig which glib libXScrnSaver
     ];
 
   NIX_CFLAGS_COMPILE="-I${qca2}/include/QtCrypto";
 
   NIX_LDFLAGS="-lqca";
 
-  psiMedia = callPackage ./psimedia.nix { };
-
   enableParallelBuilding = true;
 
-  configureFlags = [
-    "--with-aspell-inc=${aspell}/include"
-    ];
-
-  postInstall = ''
-    PSI_PLUGINS="$out/lib/psi/plugins"
-    mkdir -p "$PSI_PLUGINS"
-    ln -s "${psiMedia}"/share/psi/plugins/*.so "$PSI_PLUGINS"
-  '';
-
-  meta = {
+  meta = with stdenv.lib; {
     description = "Psi, an XMPP (Jabber) client";
-    maintainers = [ stdenv.lib.maintainers.raskin ];
+    maintainers = [ maintainers.raskin ];
+    license = licenses.gpl2;
     platforms = stdenv.lib.platforms.linux;
   };
 }

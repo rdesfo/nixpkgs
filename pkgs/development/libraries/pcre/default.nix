@@ -1,33 +1,56 @@
-{ stdenv, fetchurl, unicodeSupport ? true, cplusplusSupport ? true
-, windows ? null
+{ stdenv, fetchurl
+, pcre, windows ? null
+, variant ? null
 }:
 
 with stdenv.lib;
 
-stdenv.mkDerivation rec {
-  name = "pcre-8.36";
+assert elem variant [ null "cpp" "pcre16" "pcre32" ];
+
+let
+  version = "8.42";
+  pname = if (variant == null) then "pcre"
+    else  if (variant == "cpp") then "pcre-cpp"
+    else  variant;
+
+in stdenv.mkDerivation rec {
+  name = "${pname}-${version}";
 
   src = fetchurl {
-    url = "ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/${name}.tar.bz2";
-    sha256 = "1fs5p1z67m9f4xnyil3s4lhgyld78f7m4d1yawpyhh0cvrbk90zg";
+    url = "https://ftp.pcre.org/pub/pcre/pcre-${version}.tar.bz2";
+    sha256 = "00ckpzlgyr16bnqx8fawa3afjgqxw5yxgs2l081vw23qi1y4pl1c";
   };
 
-  configureFlags = ''
-    --enable-jit
-    ${if unicodeSupport then "--enable-unicode-properties" else ""}
-    ${if !cplusplusSupport then "--disable-cpp" else ""}
+  outputs = [ "bin" "dev" "out" "doc" "man" ];
+
+  configureFlags = optional (!stdenv.hostPlatform.isRiscV) "--enable-jit" ++ [
+    "--enable-unicode-properties"
+    "--disable-cpp"
+  ]
+    ++ optional (variant != null) "--enable-${variant}";
+
+  buildInputs = optional (stdenv.hostPlatform.libc == "msvcrt") windows.mingw_w64_pthreads;
+
+  # https://bugs.exim.org/show_bug.cgi?id=2173
+  patches = [ ./stacksize-detection.patch ];
+
+  preCheck = ''
+    patchShebangs RunGrepTest
   '';
 
-  doCheck = with stdenv; !(isCygwin || isFreeBSD);
+  doCheck = !(with stdenv.hostPlatform; isCygwin || isFreeBSD) && stdenv.hostPlatform == stdenv.buildPlatform;
     # XXX: test failure on Cygwin
     # we are running out of stack on both freeBSDs on Hydra
 
-  crossAttrs = optionalAttrs (stdenv.cross.libc == "msvcrt") {
-    buildInputs = [ windows.mingw_w64_pthreads.crossDrv ];
-  };
+  postFixup = ''
+    moveToOutput bin/pcre-config "$dev"
+  ''
+    + optionalString (variant != null) ''
+    ln -sf -t "$out/lib/" '${pcre.out}'/lib/libpcre{,posix}.{so.*.*.*,*dylib}
+  '';
 
   meta = {
-    homepage = "http://www.pcre.org/";
+    homepage = http://www.pcre.org/;
     description = "A library for Perl Compatible Regular Expressions";
     license = stdenv.lib.licenses.bsd3;
 
@@ -40,6 +63,5 @@ stdenv.mkDerivation rec {
     '';
 
     platforms = platforms.all;
-    maintainers = [ maintainers.simons ];
   };
 }

@@ -1,69 +1,90 @@
-{ stdenv, fetchurl, blas, bzip2, gfortran, liblapack, libX11, libXmu, libXt
-, libjpeg, libpng, libtiff, ncurses, pango, pcre, perl, readline, tcl
-, texLive, tk, xz, zlib, less, texinfo, graphviz, icu, pkgconfig, bison
-, imake, which, jdk, atlas
+{ stdenv, fetchurl, bzip2, gfortran, libX11, libXmu, libXt, libjpeg, libpng
+, libtiff, ncurses, pango, pcre, perl, readline, tcl, texLive, tk, xz, zlib
+, less, texinfo, graphviz, icu, pkgconfig, bison, imake, which, jdk, openblas
+, curl, Cocoa, Foundation, libobjc, libcxx, tzdata
 , withRecommendedPackages ? true
+, enableStrictBarrier ? false
+, javaSupport ? (!stdenv.hostPlatform.isAarch32 && !stdenv.hostPlatform.isAarch64)
 }:
 
 stdenv.mkDerivation rec {
-  name = "R-3.2.0";
+  name = "R-3.5.3";
 
   src = fetchurl {
-    url = "http://cran.r-project.org/src/base/R-3/${name}.tar.gz";
-    sha256 = "0dagyqgvi8i3nw158qi2zpwm04s4ffzvnmk5niaksvxs30zrbbpm";
+    url = "https://cran.r-project.org/src/base/R-3/${name}.tar.gz";
+    sha256 = "1337irx9y0r3jm1rcq1dcwnxsgfhnvgjs5wadcyh17vhpnvkgyib";
   };
 
-  buildInputs = [ blas bzip2 gfortran liblapack libX11 libXmu libXt
-    libXt libjpeg libpng libtiff ncurses pango pcre perl readline tcl
-    texLive tk xz zlib less texinfo graphviz icu pkgconfig bison imake
-    which jdk atlas
-  ];
+  dontUseImakeConfigure = true;
+
+  buildInputs = [
+    bzip2 gfortran libX11 libXmu libXt libXt libjpeg libpng libtiff ncurses
+    pango pcre perl readline texLive xz zlib less texinfo graphviz icu
+    pkgconfig bison imake which openblas curl
+  ] ++ stdenv.lib.optionals (!stdenv.isDarwin) [ tcl tk ]
+    ++ stdenv.lib.optionals stdenv.isDarwin [ Cocoa Foundation libobjc libcxx ]
+    ++ stdenv.lib.optional javaSupport jdk;
 
   patches = [ ./no-usr-local-search-paths.patch ];
+
+  prePatch = stdenv.lib.optionalString stdenv.isDarwin ''
+    substituteInPlace configure --replace "-install_name libR.dylib" "-install_name $out/lib/R/lib/libR.dylib"
+  '';
 
   preConfigure = ''
     configureFlagsArray=(
       --disable-lto
       --with${stdenv.lib.optionalString (!withRecommendedPackages) "out"}-recommended-packages
-      --with-blas="-L${atlas}/lib -lf77blas -latlas"
-      --with-lapack="-L${liblapack}/lib -llapack"
+      --with-blas="-L${openblas}/lib -lopenblas"
+      --with-lapack="-L${openblas}/lib -lopenblas"
       --with-readline
       --with-tcltk --with-tcl-config="${tcl}/lib/tclConfig.sh" --with-tk-config="${tk}/lib/tkConfig.sh"
       --with-cairo
       --with-libpng
       --with-jpeglib
       --with-libtiff
-      --with-system-zlib
-      --with-system-bzlib
-      --with-system-pcre
-      --with-system-xz
       --with-ICU
+      ${stdenv.lib.optionalString enableStrictBarrier "--enable-strict-barrier"}
       --enable-R-shlib
       AR=$(type -p ar)
       AWK=$(type -p gawk)
-      CC=$(type -p gcc)
-      CXX=$(type -p g++)
+      CC=$(type -p cc)
+      CXX=$(type -p c++)
       FC="${gfortran}/bin/gfortran" F77="${gfortran}/bin/gfortran"
-      JAVA_HOME="${jdk}"
-      LDFLAGS="-L${gfortran.cc}/lib"
+      ${stdenv.lib.optionalString javaSupport "JAVA_HOME=\"${jdk}\""}
       RANLIB=$(type -p ranlib)
       R_SHELL="${stdenv.shell}"
+  '' + stdenv.lib.optionalString stdenv.isDarwin ''
+      --without-tcltk
+      --without-aqua
+      --disable-R-framework
+      OBJC="clang"
+      CPPFLAGS="-isystem ${libcxx}/include/c++/v1"
+      LDFLAGS="-L${libcxx}/lib"
+  '' + ''
     )
-    echo "TCLLIBPATH=${tk}/lib" >>etc/Renviron.in
+    echo >>etc/Renviron.in "TCLLIBPATH=${tk}/lib"
+    echo >>etc/Renviron.in "TZDIR=${tzdata}/share/zoneinfo"
   '';
 
   installTargets = [ "install" "install-info" "install-pdf" ];
 
+  # The store path to "which" is baked into src/library/base/R/unix/system.unix.R,
+  # but Nix cannot detect it as a run-time dependency because the installed file
+  # is compiled and compressed, which hides the store path.
+  postFixup = "echo ${which} > $out/nix-support/undetected-runtime-dependencies";
+
   doCheck = true;
+  preCheck = "export TZ=CET; bin/Rscript -e 'sessionInfo()'";
 
   enableParallelBuilding = true;
 
   setupHook = ./setup-hook.sh;
 
-  meta = {
-    homepage = "http://www.r-project.org/";
+  meta = with stdenv.lib; {
+    homepage = http://www.r-project.org/;
     description = "Free software environment for statistical computing and graphics";
-    license = stdenv.lib.licenses.gpl2Plus;
+    license = licenses.gpl2Plus;
 
     longDescription = ''
       GNU R is a language and environment for statistical computing and
@@ -84,9 +105,9 @@ stdenv.mkDerivation rec {
       user-defined recursive functions and input and output facilities.
     '';
 
-    platforms = stdenv.lib.platforms.all;
-    hydraPlatforms = stdenv.lib.platforms.linux;
+    platforms = platforms.all;
+    hydraPlatforms = platforms.linux;
 
-    maintainers = [ stdenv.lib.maintainers.simons ];
+    maintainers = [ maintainers.peti ];
   };
 }

@@ -27,6 +27,7 @@ in
       package = mkOption {
         type = types.package;
         default = pkgs.lambdabot;
+        defaultText = "pkgs.lambdabot";
         description = "Used lambdabot package";
       };
 
@@ -52,12 +53,21 @@ in
       script = ''
         mkdir -p ~/.lambdabot
         cd ~/.lambdabot
-        exec ${cfg.package}/bin/lambdabot -e 'rc ${rc}'
+        mkfifo /run/lambdabot/offline
+        (
+          echo 'rc ${rc}'
+          while true; do
+            cat /run/lambdabot/offline
+          done
+        ) | ${cfg.package}/bin/lambdabot
       '';
-      serviceConfig.User = "lambdabot";
+      serviceConfig = {
+        User = "lambdabot";
+        RuntimeDirectory = [ "lambdabot" ];
+      };
     };
 
-    users.extraUsers.lambdabot = {
+    users.users.lambdabot = {
       group = "lambdabot";
       description = "Lambdabot daemon user";
       home = "/var/lib/lambdabot";
@@ -65,7 +75,7 @@ in
       uid = config.ids.uids.lambdabot;
     };
 
-    users.extraGroups.lambdabot.gid = config.ids.gids.lambdabot;
+    users.groups.lambdabot.gid = config.ids.gids.lambdabot;
 
   };
 

@@ -1,37 +1,53 @@
-{ stdenv, fetchurl, openssl, expat, libevent }:
+{ stdenv, fetchurl, openssl, nettle, expat, libevent, dns-root-data }:
 
 stdenv.mkDerivation rec {
   name = "unbound-${version}";
-  version = "1.5.1";
+  version = "1.9.0";
 
   src = fetchurl {
-    url = "http://unbound.net/downloads/${name}.tar.gz";
-    sha256 = "1v00k4b6m9wk0533s2jpg4rv9lhplh7zdp6vx2yyrmrbzc4jgy0g";
+    url = "https://unbound.net/downloads/${name}.tar.gz";
+    sha256 = "05xrb8havr2vgjsdy7n85kgnvk1mg7qwhjp4a8n6pg4jhd5zjnj1";
   };
 
-  buildInputs = [openssl expat libevent];
+  outputs = [ "out" "lib" "man" ]; # "dev" would only split ~20 kB
 
-  patches = [
-    # This patch fixes unbound 1.5.1 on linux versions previous to 3.15 which
-    # do not implement IP_PMTUDISC_OMIT.
-    #
-    # It should be discarded when this support makes it into a released
-    # version.
-    ./linux-pre-3.15-unbound-1.5.1.patch
-  ];
+  buildInputs = [ openssl nettle expat libevent ];
 
   configureFlags = [
-    "--with-ssl=${openssl}"
-    "--with-libexpat=${expat}"
-    "--with-libevent=${libevent}"
+    "--with-ssl=${openssl.dev}"
+    "--with-libexpat=${expat.dev}"
+    "--with-libevent=${libevent.dev}"
     "--localstatedir=/var"
+    "--sysconfdir=/etc"
+    "--sbindir=\${out}/bin"
+    "--with-rootkey-file=${dns-root-data}/root.key"
+    "--enable-pie"
+    "--enable-relro-now"
   ];
 
-  meta = {
+  installFlags = [ "configfile=\${out}/etc/unbound/unbound.conf" ];
+
+  preFixup = stdenv.lib.optionalString (stdenv.isLinux && !stdenv.hostPlatform.isMusl) # XXX: revisit
+    # Build libunbound again, but only against nettle instead of openssl.
+    # This avoids gnutls.out -> unbound.lib -> openssl.out.
+    # There was some problem with this on Darwin; let's not complicate non-Linux.
+    ''
+      configureFlags="$configureFlags --with-nettle=${nettle.dev} --with-libunbound-only"
+      configurePhase
+      buildPhase
+      installPhase
+    ''
+    # get rid of runtime dependencies on $dev outputs
+  + ''substituteInPlace "$lib/lib/libunbound.la" ''
+    + stdenv.lib.concatMapStrings
+      (pkg: " --replace '-L${pkg.dev}/lib' '-L${pkg.out}/lib' --replace '-R${pkg.dev}/lib' '-R${pkg.out}/lib'")
+      buildInputs;
+
+  meta = with stdenv.lib; {
     description = "Validating, recursive, and caching DNS resolver";
-    license = stdenv.lib.licenses.bsd3;
-    homepage = http://www.unbound.net;
-    maintainers = [ stdenv.lib.maintainers.emery ];
+    license = licenses.bsd3;
+    homepage = https://www.unbound.net;
+    maintainers = with maintainers; [ ehmry fpletz ];
     platforms = stdenv.lib.platforms.unix;
   };
 }

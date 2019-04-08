@@ -1,22 +1,34 @@
-{ stdenv, fetchurl, perl, icmake }:
+{ stdenv, fetchFromGitLab, perl, icmake, utillinux }:
 
 stdenv.mkDerivation rec {
   name = "yodl-${version}";
-  version = "3.05.00";
+  version = "4.02.01";
 
-  buildInputs = [ perl icmake ];
+  nativeBuildInputs = [ icmake ];
 
-  src = fetchurl {
-    url = "mirror://sourceforge/yodl/yodl_${version}.orig.tar.gz";
-    sha256 = "12hv5ghrsk6kdi414glg888v3qk3m1nmicl8f0h5k4szm1i00dig";
+  buildInputs = [ perl ];
+
+  src = fetchFromGitLab {
+    sha256 = "0m8idd8m3z27rix55avchm21sd2spcxgrdf63w65zpvnywq0ydax";
+    rev = version;
+    repo = "yodl";
+    owner = "fbb-git";
   };
 
-  preConfigure = ''
-    patchShebangs scripts/.
-    sed -i 's;/usr;;g' INSTALL.im
-    substituteInPlace build --replace /usr/bin/icmake ${icmake}/bin/icmake
-    substituteInPlace macros/rawmacros/startdoc.pl --replace /usr/bin/perl ${perl}/bin/perl
+  setSourceRoot = ''
+    sourceRoot=$(echo */yodl)
   '';
+
+  preConfigure = ''
+    patchShebangs ./build
+    patchShebangs scripts/
+    substituteInPlace INSTALL.im --replace /usr $out
+    substituteInPlace macros/rawmacros/startdoc.pl --replace /usr/bin/perl ${perl}/bin/perl
+    substituteInPlace scripts/yodl2whatever.in --replace getopt ${utillinux}/bin/getopt
+  '';
+
+  # Set TERM because icmbuild calls tput.
+  TERM = "xterm";
 
   buildPhase = ''
     ./build programs
@@ -25,14 +37,14 @@ stdenv.mkDerivation rec {
   '';
 
   installPhase = ''
-    ./build install programs $out
-    ./build install macros $out
-    ./build install man $out
+    ./build install programs
+    ./build install macros
+    ./build install man
   '';
 
   meta = with stdenv.lib; {
     description = "A package that implements a pre-document language and tools to process it";
-    homepage = http://yodl.sourceforge.net/;
+    homepage = https://fbb-git.gitlab.io/yodl/;
     license = licenses.gpl3;
     maintainers = with maintainers; [ pSub ];
     platforms = platforms.linux;

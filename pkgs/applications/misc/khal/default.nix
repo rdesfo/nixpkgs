@@ -1,17 +1,18 @@
-{ stdenv, fetchurl, pkgs, pythonPackages }:
+{ stdenv, pkgs, python3 }:
 
-pythonPackages.buildPythonPackage rec {
-  version = "0.4.0";
-  name = "khal-${version}";
+with python3.pkgs; buildPythonApplication rec {
+  pname = "khal";
+  version = "0.10.1";
 
-  src = fetchurl {
-    url = "https://github.com/geier/khal/archive/v${version}.tar.gz";
-    sha256 = "0d32miq55cly4q3raxkw3xpq4d5y3hvzaqvy066nv35bdlpafxi1";
+  src = fetchPypi {
+    inherit pname version;
+    sha256 = "1r8bkgjwkh7i8ygvsv51h1cnax50sb183vafg66x5snxf3dgjl6l";
   };
 
-  propagatedBuildInputs = with pythonPackages; [
+  propagatedBuildInputs = [
     atomicwrites
     click
+    click-log
     configobj
     dateutil
     icalendar
@@ -22,13 +23,26 @@ pythonPackages.buildPythonPackage rec {
     requests_toolbelt
     tzlocal
     urwid
+    pkginfo
+    freezegun
   ];
+  nativeBuildInputs = [ setuptools_scm ];
+  checkInputs = [ pytest ];
 
-  meta = {
+  postInstall = ''
+    install -D misc/__khal $out/share/zsh/site-functions/__khal
+  '';
+
+  doCheck = !stdenv.isAarch64;
+
+  checkPhase = ''
+    py.test
+  '';
+
+  meta = with stdenv.lib; {
     homepage = http://lostpackets.de/khal/;
     description = "CLI calendar application";
-    license = stdenv.lib.licenses.mit;
-    maintainers = with stdenv.lib.maintainers; [ matthiasbeyer ];
+    license = licenses.mit;
+    maintainers = with maintainers; [ gebner ];
   };
 }
-

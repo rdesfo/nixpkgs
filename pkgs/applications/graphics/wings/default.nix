@@ -1,29 +1,35 @@
-{ fetchurl, stdenv, erlang, esdl }:
+{ fetchurl, stdenv, erlang, cl, libGL, libGLU, runtimeShell }:
 
 stdenv.mkDerivation rec {
-  name = "wings-1.4.1";
+  name = "wings-2.2.3";
   src = fetchurl {
     url = "mirror://sourceforge/wings/${name}.tar.bz2";
-    sha256 = "16kqy92rapmbvkc58mc50cidp1pm8nlwlwx69riyadc9w4qs9bji";
+    sha256 = "1b9xdmh0186xxs92i831vm9yq0il1hngi8bl9a1q7fs26wb8js1g";
   };
 
-  ERL_LIBS = "${esdl}/lib/erlang/addons";
+  ERL_LIBS = "${cl}/lib/erlang/lib";
 
   patchPhase = ''
-    sed -i 's,include("sdl_keyboard.hrl"),include_lib("esdl/include/sdl_keyboard.hrl"),' \
-      src/wings_body.erl plugins_src/commands/wpc_constraints.erl
+    sed -i 's,-Werror ,,' e3d/Makefile
+    sed -i 's,../../wings/,../,' icons/Makefile
+    find plugins_src -mindepth 2 -type f -name "*.[eh]rl" -exec sed -i 's,wings/src/,../../src/,' {} \;
+    find plugins_src -mindepth 2 -type f -name "*.[eh]rl" -exec sed -i 's,wings/e3d/,../../e3d/,' {} \;
+    find plugins_src -mindepth 2 -type f -name "*.[eh]rl" -exec sed -i 's,wings/intl_tools/,../../intl_tools/,' {} \;
+    find . -type f -name "*.[eh]rl" -exec sed -i 's,wings/src/,../src/,' {} \;
+    find . -type f -name "*.[eh]rl" -exec sed -i 's,wings/e3d/,../e3d/,' {} \;
+    find . -type f -name "*.[eh]rl" -exec sed -i 's,wings/intl_tools/,../intl_tools/,' {} \;
   '';
 
-  buildInputs = [ erlang esdl ];
+  buildInputs = [ erlang cl libGL libGLU ];
 
+  # I did not test the *cl* part. I added the -pa just by imitation.
   installPhase = ''
     mkdir -p $out/bin $out/lib/${name}/ebin
     cp ebin/* $out/lib/${name}/ebin
-    cp -R fonts textures shaders plugins $out/lib/$name
+    cp -R textures shaders plugins $out/lib/$name
     cat << EOF > $out/bin/wings
-    #!/bin/sh
-    export ROOTDIR=$out/lib/erlang/addons/${name}
-    ${erlang}/bin/erl -smp disable -pa ${esdl}/lib/erlang/addons/${esdl.name}/ebin \
+    #!${runtimeShell}
+    ${erlang}/bin/erl \
       -pa $out/lib/${name}/ebin -run wings_start start_halt "$@"
     EOF
     chmod +x $out/bin/wings
@@ -37,4 +43,3 @@ stdenv.mkDerivation rec {
     platforms = with stdenv.lib.platforms; linux;
   };
 }
-

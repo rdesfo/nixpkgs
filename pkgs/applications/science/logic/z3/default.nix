@@ -1,41 +1,46 @@
-{ stdenv, fetchFromGitHub, python }:
+{ stdenv, fetchFromGitHub, python, fixDarwinDylibNames }:
 
 stdenv.mkDerivation rec {
   name = "z3-${version}";
-  version = "4.3.2";
+  version = "4.8.4";
 
   src = fetchFromGitHub {
     owner  = "Z3Prover";
     repo   = "z3";
-    rev    = "ac21ffebdf1512da2a77dc46c47bde87cc3850f3";
-    sha256 = "1y86akhpy41wx3gx7r8gvf7xbax7dj36ikj6gqh5a7p6r6maz9ci";
+    rev    = name;
+    sha256 = "014igqm5vwswz0yhz0cdxsj3a6dh7i79hvhgc3jmmmz3z0xm1gyn";
   };
 
-  buildInputs = [ python ];
+  patches = [
+    ./0001-fix-2131.patch
+  ];
+
+  buildInputs = [ python fixDarwinDylibNames ];
+  propagatedBuildInputs = [ python.pkgs.setuptools ];
   enableParallelBuilding = true;
 
-  configurePhase = "python scripts/mk_make.py --prefix=$out && cd build";
-
-  # z3's install phase is stupid because it tries to calculate the
-  # python package store location itself, meaning it'll attempt to
-  # write files into the nix store, and fail.
-  soext = if stdenv.system == "x86_64-darwin" then ".dylib" else ".so";
-  installPhase = ''
-    mkdir -p $out/bin $out/lib/${python.libPrefix}/site-packages $out/include
-    cp ../src/api/z3*.h       $out/include
-    cp ../src/api/c++/z3*.h   $out/include
-    cp z3                     $out/bin
-    cp libz3${soext}          $out/lib
-    cp libz3${soext}          $out/lib/${python.libPrefix}/site-packages
-    cp z3*.pyc                $out/lib/${python.libPrefix}/site-packages
-    cp ../src/api/python/*.py $out/lib/${python.libPrefix}/site-packages
+  configurePhase = ''
+    ${python.interpreter} scripts/mk_make.py --prefix=$out --python --pypkgdir=$out/${python.sitePackages}
+    cd build
   '';
+
+  postInstall = ''
+    mkdir -p $dev $lib $python/lib
+
+    mv $out/lib/python*  $python/lib/
+    mv $out/lib          $lib/lib
+    mv $out/include      $dev/include
+
+    ln -sf $lib/lib/libz3${stdenv.hostPlatform.extensions.sharedLibrary} $python/${python.sitePackages}/z3/lib/libz3${stdenv.hostPlatform.extensions.sharedLibrary}
+  '';
+
+  outputs = [ "out" "lib" "dev" "python" ];
 
   meta = {
     description = "A high-performance theorem prover and SMT solver";
-    homepage    = "http://github.com/Z3Prover/z3";
+    homepage    = "https://github.com/Z3Prover/z3";
     license     = stdenv.lib.licenses.mit;
-    platforms   = stdenv.lib.platforms.unix;
+    platforms   = stdenv.lib.platforms.x86_64;
     maintainers = [ stdenv.lib.maintainers.thoughtpolice ];
   };
 }

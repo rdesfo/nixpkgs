@@ -1,84 +1,114 @@
-{ stdenv, fetchurl, intltool, wirelesstools, pkgconfig, dbus_glib, xz
-, udev, libnl, libuuid, polkit, gnutls, ppp, dhcp, dhcpcd, iptables
-, libgcrypt, dnsmasq, avahi, bind, perl, bluez5, substituteAll
-, gobjectIntrospection, modemmanager, openresolv }:
+{ stdenv, fetchurl, substituteAll, intltool, pkgconfig, dbus, dbus-glib
+, gnome3, systemd, libuuid, polkit, gnutls, ppp, dhcp, iptables
+, libgcrypt, dnsmasq, bluez5, readline
+, gobject-introspection, modemmanager, openresolv, libndp, newt, libsoup
+, ethtool, gnused, coreutils, file, inetutils, kmod, jansson, libxslt
+, python3Packages, docbook_xsl, openconnect, curl, autoreconfHook }:
 
-stdenv.mkDerivation rec {
+let
+  pname = "NetworkManager";
+in stdenv.mkDerivation rec {
   name = "network-manager-${version}";
-  version = "0.9.8.10";
+  version = "1.14.6";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/NetworkManager/0.9/NetworkManager-${version}.tar.xz";
-    sha256 = "0wn9qh8r56r8l19dqr68pdl1rv3zg1dv47rfy6fqa91q7li2fk86";
+    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "0p9s6b1z9bdmzdjw2gnjsar1671vvcyy9inb0rxg1izf2nnwsfv9";
   };
 
+  outputs = [ "out" "dev" ];
+
+  postPatch = ''
+    patchShebangs ./tools
+  '';
+
   preConfigure = ''
-    substituteInPlace tools/glib-mkenums --replace /usr/bin/perl ${perl}/bin/perl
+    substituteInPlace configure --replace /usr/bin/uname ${coreutils}/bin/uname
+    substituteInPlace configure --replace /usr/bin/file ${file}/bin/file
+
+    # Fixes: error: po/Makefile.in.in was not created by intltoolize.
+    intltoolize --automake --copy --force
   '';
 
   # Right now we hardcode quite a few paths at build time. Probably we should
   # patch networkmanager to allow passing these path in config file. This will
   # remove unneeded build-time dependencies.
   configureFlags = [
-    "--with-distro=exherbo"
-    "--with-dhclient=${dhcp}/sbin/dhclient"
+    "--with-dhclient=${dhcp}/bin/dhclient"
+    "--with-dnsmasq=${dnsmasq}/bin/dnsmasq"
     # Upstream prefers dhclient, so don't add dhcpcd to the closure
-    #"--with-dhcpcd=${dhcpcd}/sbin/dhcpcd"
     "--with-dhcpcd=no"
-    "--with-iptables=${iptables}/sbin/iptables"
-    "--with-udev-dir=\${out}/lib/udev"
+    "--with-pppd=${ppp}/bin/pppd"
+    "--with-iptables=${iptables}/bin/iptables"
+    # to enable link-local connections
+    "--with-udev-dir=${placeholder "out"}/lib/udev"
     "--with-resolvconf=${openresolv}/sbin/resolvconf"
     "--sysconfdir=/etc" "--localstatedir=/var"
-    "--with-dbus-sys-dir=\${out}/etc/dbus-1/system.d"
+    "--with-dbus-sys-dir=${placeholder "out"}/etc/dbus-1/system.d"
     "--with-crypto=gnutls" "--disable-more-warnings"
     "--with-systemdsystemunitdir=$(out)/etc/systemd/system"
     "--with-kernel-firmware-dir=/run/current-system/firmware"
     "--with-session-tracking=systemd"
     "--with-modem-manager-1"
+    "--with-nmtui"
+    "--disable-gtk-doc"
+    "--with-libnm-glib" # legacy library, TODO: remove
+    "--disable-tests"
   ];
 
-  buildInputs = [ wirelesstools udev libnl libuuid polkit ppp xz bluez5 gobjectIntrospection modemmanager ];
+  patches = [
+    (substituteAll {
+      src = ./fix-paths.patch;
+      inherit inetutils kmod openconnect ethtool coreutils dbus;
+      inherit (stdenv) shell;
+    })
 
-  propagatedBuildInputs = [ dbus_glib gnutls libgcrypt ];
+  ];
 
-  nativeBuildInputs = [ intltool pkgconfig ];
+  buildInputs = [
+    systemd libuuid polkit ppp libndp curl
+    bluez5 dnsmasq gobject-introspection modemmanager readline newt libsoup jansson
+  ];
 
-  patches =
-    [ ( substituteAll {
-        src = ./nixos-purity.patch;
-        inherit avahi dnsmasq ppp bind;
-        glibc = stdenv.cc.libc;
-      })
-      ./libnl-3.2.25.patch
-    ];
+  propagatedBuildInputs = [ dbus-glib gnutls libgcrypt python3Packages.pygobject3 ];
 
-  preInstall =
-    ''
-      installFlagsArray=( "sysconfdir=$out/etc" "localstatedir=$out/var" )
-    '';
+  nativeBuildInputs = [ autoreconfHook intltool pkgconfig libxslt docbook_xsl ];
 
-  postInstall =
-    ''
-      mkdir -p $out/lib/NetworkManager
+  doCheck = false; # requires /sys, the net
 
-      # FIXME: Workaround until NixOS' dbus+systemd supports at_console policy
-      substituteInPlace $out/etc/dbus-1/system.d/org.freedesktop.NetworkManager.conf --replace 'at_console="true"' 'group="networkmanager"'
+  installFlags = [
+    "sysconfdir=${placeholder "out"}/etc"
+    "localstatedir=${placeholder "out"}/var"
+    "runstatedir=${placeholder "out"}/var/run"
+  ];
 
-      # rename to network-manager to be in style
-      mv $out/etc/systemd/system/NetworkManager.service $out/etc/systemd/system/network-manager.service 
-      echo "Alias=NetworkManager.service" >> $out/etc/systemd/system/dbus-org.freedesktop.nm-dispatcher.service
+  postInstall = ''
+    mkdir -p $out/lib/NetworkManager
 
-      # systemd in NixOS doesn't use `systemctl enable`, so we need to establish
-      # aliases ourselves.
-      ln -s $out/etc/systemd/system/NetworkManager-dispatcher.service $out/etc/systemd/system/dbus-org.freedesktop.nm-dispatcher.service
-      ln -s $out/etc/systemd/system/network-manager.service $out/etc/systemd/system/dbus-org.freedesktop.NetworkManager.service
-    '';
+    # FIXME: Workaround until NixOS' dbus+systemd supports at_console policy
+    substituteInPlace $out/etc/dbus-1/system.d/org.freedesktop.NetworkManager.conf --replace 'at_console="true"' 'group="networkmanager"'
+
+    # rename to network-manager to be in style
+    mv $out/etc/systemd/system/NetworkManager.service $out/etc/systemd/system/network-manager.service
+
+    # systemd in NixOS doesn't use `systemctl enable`, so we need to establish
+    # aliases ourselves.
+    ln -s $out/etc/systemd/system/NetworkManager-dispatcher.service $out/etc/systemd/system/dbus-org.freedesktop.nm-dispatcher.service
+    ln -s $out/etc/systemd/system/network-manager.service $out/etc/systemd/system/dbus-org.freedesktop.NetworkManager.service
+  '';
+
+  passthru = {
+    updateScript = gnome3.updateScript {
+      packageName = pname;
+      attrPath = "networkmanager";
+    };
+  };
 
   meta = with stdenv.lib; {
-    homepage = http://projects.gnome.org/NetworkManager/;
+    homepage = https://wiki.gnome.org/Projects/NetworkManager;
     description = "Network configuration and management tool";
     license = licenses.gpl2Plus;
-    maintainers = with maintainers; [ phreedom urkud rickynils iElectric ];
+    maintainers = with maintainers; [ phreedom rickynils domenkozar obadz ];
     platforms = platforms.linux;
   };
 }

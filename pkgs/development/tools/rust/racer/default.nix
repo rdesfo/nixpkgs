@@ -1,32 +1,37 @@
-{stdenv, fetchgit, rustc, cargo, makeWrapper }:
+{ stdenv, fetchFromGitHub, rustPlatform, makeWrapper, substituteAll }:
 
-stdenv.mkDerivation rec {
-  #TODO add emacs support
-  name = "racer-git-2015-04-12";
-  src = fetchgit {
-    url = https://github.com/phildawes/racer;
-    rev = "5437e2074d87dfaab75a0f1bd2597bed61c0bbf1";
-    sha256 = "0a768gvjry86l0xa5q0122iyq7zn2h9adfniglsgrbs4fan49xyn";
+rustPlatform.buildRustPackage rec {
+  name = "racer-${version}";
+  version = "2.0.14";
+
+  src = fetchFromGitHub {
+    owner = "racer-rust";
+    repo = "racer";
+    rev = version;
+    sha256 = "0kgax74qa09axq7b175ph3psprgidwgsml83wm1qwdq16gpxiaif";
   };
 
-  buildInputs = [ rustc cargo makeWrapper ];
+  cargoSha256 = "1j3fviimdxn6xa75z0l9wkgdnznp8q20jjs42mql6ql782dga5lk";
 
-  buildPhase = ''
-    CARGO_HOME="$NIX_BUILD_TOP/.cargo" cargo build --release
-  '';
+  buildInputs = [ makeWrapper ];
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp -p target/release/racer $out/bin/
-    wrapProgram $out/bin/racer --set RUST_SRC_PATH "${rustc.src}/src"
-    install -d $out/share/emacs/site-lisp
-    install "editors/"*.el $out/share/emacs/site-lisp
+  preCheck = ''
+    export RUST_SRC_PATH="${rustPlatform.rustcSrc}"
   '';
+  patches = [
+    (substituteAll {
+      src = ./rust-src.patch;
+      inherit (rustPlatform) rustcSrc;
+    })
+    ./ignore-tests.patch
+  ];
+  doCheck = true;
 
   meta = with stdenv.lib; {
-    description = "A utility intended to provide Rust code completion for editors and IDEs.";
-    homepage = https://github.com/phildawes/racer;
-    license = stdenv.lib.licenses.mit;
-    maintainers = [ maintainers.jagajaga ];
+    description = "A utility intended to provide Rust code completion for editors and IDEs";
+    homepage = https://github.com/racer-rust/racer;
+    license = licenses.mit;
+    maintainers = with maintainers; [ jagajaga globin ];
+    platforms = platforms.all;
   };
 }

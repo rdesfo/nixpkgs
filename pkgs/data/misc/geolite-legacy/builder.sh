@@ -1,5 +1,3 @@
-#!/bin/sh -e
-
 source "$stdenv/setup"
 
 mkdir -p $out/share/GeoIP
@@ -16,4 +14,7 @@ for var in "${!src@}"; do
 	cp "$src" "$dest"
 done
 
-gunzip -v *.gz
+gzip -dv *.gz
+
+ln -s GeoLiteCity.dat GeoIPCity.dat
+ln -s GeoLiteCityv6.dat GeoIPCityv6.dat

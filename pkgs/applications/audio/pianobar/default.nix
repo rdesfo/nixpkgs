@@ -1,15 +1,16 @@
-{ fetchurl, stdenv, pkgconfig, libao, readline, json_c, libgcrypt, gnutls, libav }:
+{ fetchurl, stdenv, pkgconfig, libao, json_c, libgcrypt, ffmpeg, curl }:
 
 stdenv.mkDerivation rec {
-  name = "pianobar-2014.09.28";
+  name = "pianobar-2019.02.14";
 
   src = fetchurl {
     url = "http://6xq.net/projects/pianobar/${name}.tar.bz2";
-    sha256 = "6bd10218ad5d68c4c761e02c729627d2581b4a6db559190e7e52dc5df177e68f";
+    sha256 = "07z21vmlqpmvb3294r384iqbx972rwcx6chrdlkfv4hlnc9h7gf0";
   };
 
+  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    pkgconfig libao json_c libgcrypt gnutls libav
+    libao json_c libgcrypt ffmpeg curl
   ];
 
   makeFlags="PREFIX=$(out)";
@@ -17,13 +18,10 @@ stdenv.mkDerivation rec {
   CC = "gcc";
   CFLAGS = "-std=c99";
 
-  configurePhase = "export CC=${CC}";
-
-  meta = {
+  meta = with stdenv.lib; {
     description = "A console front-end for Pandora.com";
-    homepage = "http://6xq.net/projects/pianobar/";
-    platforms = stdenv.lib.platforms.linux;
-    license = stdenv.lib.licenses.mit; # expat version
-    maintainers = stdenv.lib.maintainers.eduarrrd;
+    homepage = http://6xq.net/projects/pianobar/;
+    platforms = platforms.linux;
+    license = licenses.mit; # expat version
   };
 }

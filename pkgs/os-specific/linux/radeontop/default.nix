@@ -1,17 +1,19 @@
-{ stdenv, fetchFromGitHub, pkgconfig, gettext, ncurses, libdrm, libpciaccess }:
+{ stdenv, fetchFromGitHub, pkgconfig, gettext, makeWrapper
+, ncurses, libdrm, libpciaccess, libxcb }:
 
-let version = "v0.8-8-g2499679"; in
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   name = "radeontop-${version}";
+  version = "2018-03-25";
 
   src = fetchFromGitHub {
-    sha256 = "112zf6ms0qpmr9h3l4lg5wik5j206mgij0nypba5lnqzksxh2f88";
-    rev = "2499679fda60c3f6239886296fd2a74155f45f77";
+    sha256 = "0s41xy9nrzxmimkdg23fr86rqcfiw6iqh99zpph0j990l8yzmv9b";
+    rev = "v1.1";
     repo = "radeontop";
     owner = "clbr";
   };
 
-  buildInputs = [ pkgconfig gettext ncurses libdrm libpciaccess ];
+  buildInputs = [ ncurses libdrm libpciaccess libxcb ];
+  nativeBuildInputs = [ pkgconfig gettext makeWrapper ];
 
   enableParallelBuilding = true;
 
@@ -19,7 +21,12 @@ stdenv.mkDerivation {
     substituteInPlace getver.sh --replace ver=unknown ver=${version}
   '';
 
-  makeFlags = "PREFIX=$(out)";
+  makeFlags = [ "PREFIX=$(out)" ];
+
+  postInstall = ''
+    wrapProgram $out/sbin/radeontop \
+      --prefix LD_LIBRARY_PATH : $out/lib
+  '';
 
   meta = with stdenv.lib; {
     description = "Top-like tool for viewing AMD Radeon GPU utilization";
@@ -33,6 +40,6 @@ stdenv.mkDerivation {
     homepage = https://github.com/clbr/radeontop;
     platforms = platforms.linux;
     license = licenses.gpl3;
-    maintainers = with maintainers; [ rycee nckx ];
+    maintainers = with maintainers; [ rycee ];
   };
 }

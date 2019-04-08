@@ -1,23 +1,23 @@
-{ stdenv, lib, fetchurl, dpkg, patchelf, qt4, libXtst, libXext, libX11, makeWrapper, libXScrnSaver }:
+{ stdenv, lib, fetchurl, dpkg, patchelf, qt5, libXtst, libXext, libX11, makeWrapper, libXScrnSaver }:
 
 let
   src =
-    if stdenv.system == "i686-linux" then fetchurl {
+    if stdenv.hostPlatform.system == "i686-linux" then fetchurl {
       name = "rescuetime-installer.deb";
       url = "https://www.rescuetime.com/installers/rescuetime_current_i386.deb";
-      sha256 = "03dj0ivavxlcvx7dv7y6zllwqkclfyxkfax691zv2qclmk5gf8wz";
+      sha256 = "136ci4q0ns0qzikndlkbab947m47zv2nmnn8mda2374ip43kn6ri";
     } else fetchurl {
       name = "rescuetime-installer.deb";
       url = "https://www.rescuetime.com/installers/rescuetime_current_amd64.deb";
-      sha256 = "11by4lkij1ryv8h3mz55hj3ssrikl697rs5b7mlg3g058gr2v3wl";
+      sha256 = "1cw10lr7hrsr9xvq3wv1wkyk7jqsgfnnlkq4km9kxr39f51hv6na";
     };
-
-in
-
-stdenv.mkDerivation {
-  name = "rescuetime-2.8.6.1015";
+in stdenv.mkDerivation {
+  # https://www.rescuetime.com/updates/linux_release_notes.html
+  name = "rescuetime-2.14.2.1";
   inherit src;
   buildInputs = [ dpkg makeWrapper ];
+  # avoid https://github.com/NixOS/patchelf/issues/99
+  dontStrip = true;
   unpackPhase = ''
     mkdir pkg
     dpkg-deb -x $src pkg
@@ -29,10 +29,8 @@ stdenv.mkDerivation {
 
     ${patchelf}/bin/patchelf \
       --interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
+      --set-rpath "${lib.makeLibraryPath [ qt5.qtbase libXtst libXext libX11 libXScrnSaver ]}" \
       $out/bin/rescuetime
-
-    wrapProgram $out/bin/rescuetime \
-      --prefix LD_PRELOAD : ${qt4}/lib/libQtGui.so.4:${qt4}/lib/libQtCore.so.4:${libXtst}/lib/libXtst.so.6:${libXext}/lib/libXext.so.6:${libX11}/lib/libX11.so.6:${libXScrnSaver}/lib/libXss.so.1
   '';
   meta = with lib; {
     description = "Helps you understand your daily habits so you can focus and be more productive";

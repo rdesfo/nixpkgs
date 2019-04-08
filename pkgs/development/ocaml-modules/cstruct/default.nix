@@ -1,27 +1,20 @@
-{ stdenv, fetchzip, ocaml, findlib, sexplib, ocplib-endian, lwt, camlp4 }:
+{ stdenv, fetchurl, buildDunePackage, sexplib, ocplib-endian }:
 
-let version = "1.6.0"; in
+buildDunePackage rec {
+  pname = "cstruct";
+  version = "3.1.1";
 
-stdenv.mkDerivation {
-  name = "ocaml-cstruct-${version}";
-
-  src = fetchzip {
-    url = "https://github.com/mirage/ocaml-cstruct/archive/v${version}.tar.gz";
-    sha256 = "09qw3rhfiq2kkns6660p9cwm5610k72md52a04cy91gr6gsig6ic";
+  src = fetchurl {
+    url = "https://github.com/mirage/ocaml-cstruct/releases/download/v${version}/cstruct-${version}.tbz";
+    sha256 = "1x4jxsvd1lrfibnjdjrkfl7hqsc48rljnwbap6faanj9qhwwa6v2";
   };
 
-  buildInputs = [ ocaml findlib lwt camlp4 ];
-  propagatedBuildInputs = [ ocplib-endian sexplib ];
-
-  configureFlags = "--enable-lwt";
-
-  createFindlibDestdir = true;
+  propagatedBuildInputs = [ sexplib ocplib-endian ];
 
   meta = {
-    description = "Map OCaml arrays onto C-like structs";
-    homepage = https://github.com/mirage/ocaml-cstruct;
+    description = "Access C-like structures directly from OCaml";
     license = stdenv.lib.licenses.isc;
-    maintainers = with stdenv.lib.maintainers; [ vbgl ];
-    platforms = ocaml.meta.platforms;
+    homepage = "https://github.com/mirage/ocaml-cstruct";
+    maintainers = [ stdenv.lib.maintainers.vbgl ];
   };
 }

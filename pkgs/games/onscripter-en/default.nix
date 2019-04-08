@@ -26,9 +26,9 @@ stdenv.mkDerivation rec {
 
   meta = with stdenv.lib; {
     description = "Japanese visual novel scripting engine";
-    homepage = "http://dev.haeleth.net/onscripter.shtml";
+    homepage = http://unclemion.com/onscripter/;
     license = licenses.gpl2;
     platforms = platforms.unix;
-    maintainers = maintainers.abbradar;
+    maintainers = with maintainers; [ abbradar ];
   };
 }

@@ -4,7 +4,7 @@ let name = "${pkgName}-${version}";
 in stdenv.mkDerivation ({
   inherit name buildInputs;
   src = fetchurl {
-    url = "http://downloads.sourceforge.net/cdemu/${name}.tar.bz2";
+    url = "mirror://sourceforge/cdemu/${name}.tar.bz2";
     sha256 = pkgSha256;
   };
   nativeBuildInputs = [ pkgconfig cmake ];
@@ -16,8 +16,8 @@ in stdenv.mkDerivation ({
   configurePhase = ''
     cmake ../${name} -DCMAKE_INSTALL_PREFIX=$out -DCMAKE_BUILD_TYPE=Release -DCMAKE_SKIP_RPATH=ON
   '';
-  meta = {
-    description = "CDemu is a software suite designed to emulate an optical drive and disc (including CD-ROMs and DVD-ROMs) on the Linux operating system.";
+  meta = with stdenv.lib; {
+    description = "A suite of tools for emulating optical drives and discs";
     longDescription = ''
       CDEmu consists of:
 
@@ -29,9 +29,9 @@ in stdenv.mkDerivation ({
 
       Optical media emulated by CDemu can be mounted within Linux. Automounting is also allowed.
     '';
-    homepage = "http://cdemu.sourceforge.net/";
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ "Rok Mandeljc <mrok AT users DOT sourceforge DOT net>" ];
+    homepage = http://cdemu.sourceforge.net/;
+    license = licenses.gpl2Plus;
+    platforms = platforms.linux;
+    maintainers = with stdenv.lib.maintainers; [ bendlas ];
   };
 } // drvParams)

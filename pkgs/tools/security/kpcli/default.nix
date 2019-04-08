@@ -1,12 +1,12 @@
 { stdenv, fetchurl, makeWrapper, perl, perlPackages }:
 
 stdenv.mkDerivation rec {
-  version = "2.8";
+  version = "3.2";
   name = "kpcli-${version}";
 
   src = fetchurl {
     url = "mirror://sourceforge/kpcli/${name}.pl";
-    sha256 = "1vmj131ii3skm1dx0pmcvq19h6a94a2vjldmqlf1b3dxjvz1ld91";
+    sha256 = "11z6zbnsmqgjw73ai4nrq4idr83flrib22d8fqh1637d36p1nnk1";
   };
 
   buildInputs = [ makeWrapper perl ];
@@ -14,14 +14,14 @@ stdenv.mkDerivation rec {
   phases = [ "installPhase" "fixupPhase" ];
 
   installPhase = ''
-    mkdir -p $out/bin
-    cp ${src} $out/bin/kpcli
-    chmod +x $out/bin/kpcli
+    mkdir -p $out/{bin,share}
+    cp ${src} $out/share/kpcli.pl
+    chmod +x $out/share/kpcli.pl
 
-    wrapProgram $out/bin/kpcli --set PERL5LIB \
-      "${with perlPackages; stdenv.lib.makePerlPath [
-         Clone CryptRijndael SortNaturally TermReadKey TermShellUI FileKeePass TermReadLineGnu XMLParser
-      ]}"
+    makeWrapper $out/share/kpcli.pl $out/bin/kpcli --set PERL5LIB \
+      "${with perlPackages; makePerlPath ([
+         CaptureTiny Clipboard Clone CryptRijndael SortNaturally TermReadKey TermShellUI FileKeePass TermReadLineGnu XMLParser
+      ] ++ stdenv.lib.optional stdenv.isDarwin MacPasteboard)}"
   '';
 
 
@@ -32,7 +32,7 @@ stdenv.mkDerivation rec {
       Use this program to access and manage your KeePass 1.x or 2.x databases from a Unix-like command line.
     '';
     license = licenses.artistic1;
-    homepage = "http://kpcli.sourceforge.net";
+    homepage = http://kpcli.sourceforge.net;
     platforms = platforms.all;
     maintainers = [ maintainers.j-keck ];
   };

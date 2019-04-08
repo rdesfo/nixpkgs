@@ -64,7 +64,7 @@ let
             stdenv.lib.platforms.${removePrefix "!" entry} or [];
         in
           # Ignore unknown platforms
-          if filterPlatforms == [] then platforms
+          if filterPlatforms == [] then (if platforms == [] then nodejs.meta.platforms else platforms)
           else
             if hasPrefix "!" entry then
               subtractLists (intersectLists filterPlatforms nodejs.meta.platforms) platforms
@@ -145,7 +145,7 @@ let
         function replaceImpureVersionSpec(versionSpec) {
             var parsedUrl = url.parse(versionSpec);
 
-            if(versionSpec == "latest" || versionSpec == "unstable" ||
+            if(versionSpec == "" || versionSpec == "latest" || versionSpec == "unstable" ||
                 versionSpec.substr(0, 2) == ".." || dependency.substr(0, 2) == "./" || dependency.substr(0, 2) == "~/" || dependency.substr(0, 1) == '/' || /^[^/]+\/[^/]+$/.test(versionSpec))
                 return '*';
             else if(parsedUrl.protocol == "git:" || parsedUrl.protocol == "git+ssh:" || parsedUrl.protocol == "git+http:" || parsedUrl.protocol == "git+https:" ||

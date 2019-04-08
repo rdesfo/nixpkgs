@@ -5,7 +5,7 @@ with lib;
 let
   cfg = config.services.scollector;
 
-  collectors = pkgs.runCommand "collectors" {}
+  collectors = pkgs.runCommand "collectors" { preferLocalBuild = true; }
     ''
     mkdir -p $out
     ${lib.concatStringsSep
@@ -20,9 +20,11 @@ let
           cfg.collectors)}
     '';
 
-  cmdLineOpts = concatStringsSep " " (
-    [ "-h=${cfg.bosunHost}" "-c=${collectors}" ] ++ cfg.extraOpts
-  );
+  conf = pkgs.writeText "scollector.toml" ''
+    Host = "${cfg.bosunHost}"
+    ColDir = "${collectors}"
+    ${cfg.extraConfig}
+  '';
 
 in {
 
@@ -41,6 +43,7 @@ in {
       package = mkOption {
         type = types.package;
         default = pkgs.scollector;
+        defaultText = "pkgs.scollector";
         example = literalExample "pkgs.scollector";
         description = ''
           scollector binary to use.
@@ -73,9 +76,9 @@ in {
       };
 
       collectors = mkOption {
-        type = types.attrs;
+        type = with types; attrsOf (listOf path);
         default = {};
-        example = literalExample "{ 0 = [ \"\${postgresStats}/bin/collect-stats\" ]; }";
+        example = literalExample "{ \"0\" = [ \"\${postgresStats}/bin/collect-stats\" ]; }";
         description = ''
           An attribute set mapping the frequency of collection to a list of
           binaries that should be executed at that frequency. You can use "0"
@@ -89,6 +92,14 @@ in {
         example = [ "-d" ];
         description = ''
           Extra scollector command line options
+        '';
+      };
+
+      extraConfig = mkOption {
+        type = types.lines;
+        default = "";
+        description = ''
+          Extra scollector configuration added to the end of scollector.toml
         '';
       };
 
@@ -108,17 +119,17 @@ in {
         PermissionsStartOnly = true;
         User = cfg.user;
         Group = cfg.group;
-        ExecStart = "${cfg.package}/bin/scollector ${cmdLineOpts}";
+        ExecStart = "${cfg.package.bin}/bin/scollector -conf=${conf} ${lib.concatStringsSep " " cfg.extraOpts}";
       };
     };
 
-    users.extraUsers.scollector = {
+    users.users.scollector = {
       description = "scollector user";
       group = "scollector";
       uid = config.ids.uids.scollector;
     };
 
-    users.extraGroups.scollector.gid = config.ids.gids.scollector;
+    users.groups.scollector.gid = config.ids.gids.scollector;
 
   };
 

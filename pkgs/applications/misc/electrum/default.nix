@@ -1,43 +1,89 @@
-{ stdenv, fetchurl, buildPythonPackage, pythonPackages, slowaes }:
+{ stdenv, fetchFromGitHub, python3, python3Packages, zbar, secp256k1 }:
 
-buildPythonPackage rec {
-  name = "electrum-${version}";
-  version = "2.0.4";
+let
+  qdarkstyle = python3Packages.buildPythonPackage rec {
+    pname = "QDarkStyle";
+    version = "2.5.4";
+    src = python3Packages.fetchPypi {
+      inherit pname version;
+      sha256 = "1w715m1i5pycfqcpkrggpn0rs9cakx6cm5v8rggcxnf4p0i0kdiy";
+    };
+    doCheck = false; # no tests
+  };
+in
 
-  src = fetchurl {
-    url = "https://download.electrum.org/Electrum-${version}.tar.gz";
-    sha256 = "0q9vrrzy2iypfg2zvs3glzvqyq65dnwn1ijljvfqfwrkpvpp0zxp";
+python3Packages.buildPythonApplication rec {
+  pname = "electrum";
+  version = "3.3.4";
+
+  src = fetchFromGitHub {
+    owner = "spesmilo";
+    repo = "electrum";
+    rev = version;
+    sha256 = "0yxdpc602jnd14xz3px85ka0b6db98zwbgfi9a3vj8p1k3mmiwaj";
   };
 
-  propagatedBuildInputs = with pythonPackages; [
-    dns
+  propagatedBuildInputs = with python3Packages; [
+    aiorpcx
+    aiohttp
+    aiohttp-socks
+    dnspython
     ecdsa
+    jsonrpclib-pelix
+    matplotlib
     pbkdf2
     protobuf
-    pyasn1
-    pyasn1-modules
-    pyqt4
+    pyaes
+    pycryptodomex
+    pyqt5
+    pysocks
+    qdarkstyle
     qrcode
     requests
-    slowaes
-    tlslite
+    tlslite-ng
+
+    # plugins
+    keepkey
+    trezor
+    btchip
+
+    # TODO plugins
+    # amodem
   ];
 
-  preInstall = ''
-    mkdir -p $out/share
-    sed -i 's@usr_share = .*@usr_share = os.getenv("out")+"/share"@' setup.py
+  preBuild = ''
+    sed -i 's,usr_share = .*,usr_share = "'$out'/share",g' setup.py
+    sed -i "s|name = 'libzbar.*'|name='${zbar}/lib/libzbar.so'|" electrum/qrscanner.py
+    substituteInPlace ./electrum/ecc_fast.py --replace libsecp256k1.so.0 ${secp256k1}/lib/libsecp256k1.so.0
+  '';
+
+  postInstall = ''
+    # Despite setting usr_share above, these files are installed under
+    # $out/nix ...
+    mv $out/${python3.sitePackages}/nix/store"/"*/share $out
+    rm -rf $out/${python3.sitePackages}/nix
+
+    substituteInPlace $out/share/applications/electrum.desktop \
+      --replace "Exec=electrum %u" "Exec=$out/bin/electrum %u"
+  '';
+
+  checkInputs = with python3Packages; [ pytest ];
+
+  checkPhase = ''
+    py.test electrum/tests
+    $out/bin/electrum help >/dev/null
   '';
 
   meta = with stdenv.lib; {
-    description = "Bitcoin thin-client";
+    description = "A lightweight Bitcoin wallet";
     longDescription = ''
       An easy-to-use Bitcoin client featuring wallets generated from
       mnemonic seeds (in addition to other, more advanced, wallet options)
       and the ability to perform transactions without downloading a copy
       of the blockchain.
     '';
-    homepage = https://electrum.org;
-    license = licenses.gpl3;
-    maintainers = with maintainers; [ emery joachifm ];
+    homepage = https://electrum.org/;
+    license = licenses.mit;
+    maintainers = with maintainers; [ ehmry joachifm np ];
   };
 }

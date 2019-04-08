@@ -1,21 +1,41 @@
-{ stdenv, fetchurl, libxslt, kdelibs, kdepimlibs, grantlee, qjson, qca2, libofx, sqlite, gettext, boost }:
+{ mkDerivation, lib, fetchurl,
+  cmake, extra-cmake-modules, qtwebengine, qtscript, grantlee,
+  kxmlgui, kwallet, kparts, kdoctools, kjobwidgets, kdesignerplugin,
+  kiconthemes, knewstuff, sqlcipher, qca-qt5, kactivities, karchive,
+  kguiaddons, knotifyconfig, krunner, kwindowsystem, libofx, shared-mime-info
+}:
 
-stdenv.mkDerivation rec {
-  name = "skrooge-1.10.0";
+mkDerivation rec {
+  name = "skrooge-${version}";
+  version = "2.18.0";
 
   src = fetchurl {
-    url = "http://download.kde.org/stable/skrooge/${name}.tar.bz2";
-    sha256 = "0rsw2xdgws5bvnf3h4hg16liahigcxgaxls7f8hzr9wipxx5xqda";
+    url = "http://download.kde.org/stable/skrooge/${name}.tar.xz";
+    sha256 = "00zk152clnmq8rjjnrxmd7lfflf2pnzljaw73bjjsb6r6vkxywa6";
   };
 
-  buildInputs = [ libxslt kdelibs kdepimlibs grantlee qjson qca2 libofx sqlite boost ];
+  nativeBuildInputs = [
+    cmake extra-cmake-modules kdoctools shared-mime-info
+  ];
 
-  nativeBuildInputs = [ gettext ];
+  buildInputs = [
+    qtwebengine qtscript grantlee kxmlgui kwallet kparts
+    kjobwidgets kdesignerplugin kiconthemes knewstuff sqlcipher qca-qt5
+    kactivities karchive kguiaddons knotifyconfig krunner kwindowsystem libofx
+  ];
 
-  meta = {
-    inherit (kdelibs.meta) platforms;
-    description = "A personal finance manager for KDE";
-    maintainers = [ stdenv.lib.maintainers.urkud ];
-    license = stdenv.lib.licenses.gpl3;
+  # SKG_DESIGNER must be used to generate the needed library for QtDesigner.
+  # This is needed ONLY for developers. So NOT NEEDED for end user.
+  # Source: https://forum.kde.org/viewtopic.php?f=210&t=143375#p393675
+  cmakeFlags = [
+    "-DSKG_DESIGNER=OFF"
+    "-DSKG_WEBENGINE=ON"
+  ];
+
+  meta = with lib; {
+    description = "A personal finances manager, powered by KDE";
+    license = with licenses; [ gpl3 ];
+    maintainers = with maintainers; [ joko ];
+    homepage = https://skrooge.org/;
   };
 }

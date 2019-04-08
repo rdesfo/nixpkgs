@@ -1,39 +1,36 @@
-x@{builderDefsPackage
-  , imagemagickBig, pkgconfig, python, pygtk, perl, libX11, libv4l
-  , qt4, lzma, gtk2
-  , ...}:
-builderDefsPackage
-(a :  
-let 
-  helperArgNames = ["stdenv" "fetchurl" "builderDefsPackage"] ++ 
-    [];
+{ stdenv, fetchFromGitHub, imagemagickBig, pkgconfig, python2Packages, perl
+, libX11, libv4l, qt5, lzma, gtk2, xmlto, docbook_xsl, autoreconfHook
+, enableVideo ? stdenv.isLinux
+}:
 
-  buildInputs = map (n: builtins.getAttr n x)
-    (builtins.attrNames (builtins.removeAttrs x helperArgNames));
-  sourceInfo = rec {
-    baseName="zbar";
-    version="0.10";
-    name="${baseName}-${version}";
-    pName="${baseName}";
-    url="mirror://sourceforge/project/${pName}/${baseName}/${version}/${name}.tar.bz2";
-    hash="1imdvf5k34g1x2zr6975basczkz3zdxg6xnci50yyp5yvcwznki3";
-  };
-in
-rec {
-  src = a.fetchurl {
-    url = sourceInfo.url;
-    sha256 = sourceInfo.hash;
+let
+  inherit (python2Packages) pygtk python;
+in stdenv.mkDerivation rec {
+  pname = "zbar";
+  version = "0.22";
+
+  src = fetchFromGitHub {
+    owner = "mchehab";
+    repo = "zbar";
+    rev = version;
+    sha256 = "0pz0vq6a97vnc3lcjw9k12dk2awgmws46cjfh16zin0jiz18d1xq";
   };
 
-  inherit (sourceInfo) name version;
-  inherit buildInputs;
+  nativeBuildInputs = [ pkgconfig xmlto autoreconfHook docbook_xsl ];
 
-  /* doConfigure should be removed if not needed */
-  phaseNames = ["doConfigure" "doMakeInstall"];
+  buildInputs = [
+    imagemagickBig python pygtk perl libX11
+  ] ++ stdenv.lib.optionals enableVideo [
+    libv4l gtk2 qt5.qtbase qt5.qtx11extras
+  ];
 
-  configureFlags = ["--disable-video"];
-      
-  meta = {
+  configureFlags = [
+    "--with-dbusconfdir=$out/etc/dbus-1/system.d"
+  ] ++ stdenv.lib.optionals (!enableVideo) [
+    "--disable-video" "--without-gtk" "--without-qt"
+  ];
+
+  meta = with stdenv.lib; {
     description = "Bar code reader";
     longDescription = ''
       ZBar is an open source software suite for reading bar codes from various
@@ -42,18 +39,9 @@ rec {
       EAN-13/UPC-A, UPC-E, EAN-8, Code 128, Code 39, Interleaved 2 of 5 and QR
       Code.
     '';
-    maintainers = with a.lib.maintainers;
-    [
-      raskin
-    ];
-    platforms = with a.lib.platforms;
-      linux;
-    license = a.lib.licenses.lgpl21;
+    maintainers = with maintainers; [ delroth raskin ];
+    platforms = platforms.unix;
+    license = licenses.lgpl21;
+    homepage = https://github.com/mchehab/zbar;
   };
-  passthru = {
-    updateInfo = {
-      downloadPage = "http://zbar.sourceforge.net/";
-    };
-  };
-}) x
-
+}

@@ -1,24 +1,22 @@
-{ stdenv, fetchzip, ocaml, findlib }:
+{ stdenv, fetchzip, buildDunePackage, ounit, seq }:
 
-stdenv.mkDerivation rec {
-  name = "ocaml-re-1.3.1";
+buildDunePackage rec {
+  pname = "re";
+  version = "1.8.0";
+
+  minimumOCamlVersion = "4.02";
 
   src = fetchzip {
-    url = "https://github.com/ocaml/ocaml-re/archive/${name}.tar.gz";
-    sha256 = "11d4k43pc97kvdbjgjcxpc0gq6yal4galkxlrfdp1iypwdcni92g";
+    url = "https://github.com/ocaml/ocaml-re/archive/${version}.tar.gz";
+    sha256 = "0ch6hvmm4ym3w2vghjxf3ka5j1023a37980fqi4zcb7sx756z20i";
   };
 
-  buildInputs = [ ocaml findlib ];
-
-  configurePhase = "ocaml setup.ml -configure --prefix $out";
-  buildPhase = "ocaml setup.ml -build";
-  installPhase = "ocaml setup.ml -install";
-
-  createFindlibDestdir = true;
+  buildInputs = [ ounit ];
+  propagatedBuildInputs = [ seq ];
+  doCheck = true;
 
   meta = {
     homepage = https://github.com/ocaml/ocaml-re;
-    platforms = ocaml.meta.platforms;
     description = "Pure OCaml regular expressions, with support for Perl and POSIX-style strings";
     license = stdenv.lib.licenses.lgpl2;
     maintainers = with stdenv.lib.maintainers; [ vbgl ];

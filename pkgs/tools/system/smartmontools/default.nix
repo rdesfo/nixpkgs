@@ -1,31 +1,37 @@
-{ stdenv, fetchurl }:
+{ stdenv, fetchurl, fetchpatch, autoreconfHook
+, IOKit ? null , ApplicationServices ? null }:
 
 let
-  dbrev = "3849";
+  version = "7.0";
+
+  dbrev = "4883";
+  drivedbBranch = "RELEASE_${builtins.replaceStrings ["."] ["_"] version}_DRIVEDB";
   driverdb = fetchurl {
-    url = "http://sourceforge.net/p/smartmontools/code/${dbrev}/tree/trunk/smartmontools/drivedb.h?format=raw";
-    sha256 = "06c1cl0x4sq64l3rmd5rk8wsbggjixphpgj0kf4awqhjgsi102xz";
-    name = "smartmontools-drivedb.h";
+    url    = "https://sourceforge.net/p/smartmontools/code/${dbrev}/tree/branches/${drivedbBranch}/smartmontools/drivedb.h?format=raw";
+    sha256 = "07x3haz65jyhj579h4z17v6jkw6bbyid34442gl4qddmgv2qzvwx";
+    name   = "smartmontools-drivedb.h";
   };
-in
-stdenv.mkDerivation rec {
-  name = "smartmontools-6.3";
+
+in stdenv.mkDerivation rec {
+  name = "smartmontools-${version}";
 
   src = fetchurl {
     url = "mirror://sourceforge/smartmontools/${name}.tar.gz";
-    sha256 = "06gy71jh2d3gcfmlbbrsqw7215knkfq59q3j6qdxfrar39fhcxx7";
+    sha256 = "077nx2rn9szrg6isdh0938zbp7vr3dsyxl4jdyyzv1xwhqksrqg5";
   };
 
-  patchPhase = ''
-    : cp ${driverdb} drivedb.h
-    sed -i -e 's@which which >/dev/null || exit 1@alias which="type -p"@' update-smart-drivedb.in
-  '';
+  patches = [ ./smartmontools.patch ];
+  postPatch = "cp -v ${driverdb} drivedb.h";
 
-  meta = {
-    description = "Tools for monitoring the health of hard drivers";
-    homepage = "http://smartmontools.sourceforge.net/";
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.simons ];
+  nativeBuildInputs = [ autoreconfHook ];
+  buildInputs = [] ++ stdenv.lib.optionals stdenv.isDarwin [IOKit ApplicationServices];
+  enableParallelBuilding = true;
+
+  meta = with stdenv.lib; {
+    description = "Tools for monitoring the health of hard drives";
+    homepage    = https://www.smartmontools.org/;
+    license     = licenses.gpl2Plus;
+    maintainers = with maintainers; [ peti ];
+    platforms   = with platforms; linux ++ darwin;
   };
 }

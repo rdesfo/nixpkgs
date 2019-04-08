@@ -1,25 +1,42 @@
-{ stdenv, fetchurl, boost, cryptopp }:
+{ stdenv, fetchFromGitHub
+, boost, zlib, openssl
+, upnpSupport ? true, miniupnpc ? null
+, aesniSupport ? false
+, avxSupport ? false
+}:
+
+assert upnpSupport -> miniupnpc != null;
 
 stdenv.mkDerivation rec {
 
-  name = "i2pd-${version}";
-  version = "0.9.0";
+  name = pname + "-" + version;
+  pname = "i2pd";
+  version = "2.23.0";
 
-  src = fetchurl {
-    name = "i2pd-src-${version}.tar.gz";
-    url = "https://github.com/PurpleI2P/i2pd/archive/${version}.tar.gz";
-    sha256 = "1rcf4wc34g2alva9jzj6bz0f88g2f5v1w4418b6lp6chvqi7fhc7";
+  src = fetchFromGitHub {
+    owner = "PurpleI2P";
+    repo = pname;
+    rev = version;
+    sha256 = "0sw9fjamd5wjrsxnxsih9532yf6x3rrjmv5ybskkpk7b6acyqjj1";
   };
 
-  buildInputs = [ boost cryptopp ];
+  buildInputs = with stdenv.lib; [ boost zlib openssl ]
+    ++ optional upnpSupport miniupnpc;
+  makeFlags =
+    let ynf = a: b: a + "=" + (if b then "yes" else "no"); in
+    [ (ynf "USE_AESNI" aesniSupport)
+      (ynf "USE_AVX"   avxSupport)
+      (ynf "USE_UPNP"  upnpSupport)
+    ];
+
   installPhase = ''
-    install -D i2p $out/bin/i2p
+    install -D i2pd $out/bin/i2pd
   '';
 
   meta = with stdenv.lib; {
-    homepage = "https://track.privacysolutions.no/projects/i2pd";
+    homepage = https://i2pd.website;
     description = "Minimal I2P router written in C++";
-    licenses = licenses.gpl2;
+    license = licenses.bsd3;
     maintainers = with maintainers; [ edwtjo ];
     platforms = platforms.linux;
   };

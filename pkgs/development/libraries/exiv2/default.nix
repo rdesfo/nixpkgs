@@ -1,28 +1,33 @@
-{stdenv, fetchurl, fetchpatch, zlib, expat}:
+{ stdenv, fetchurl, fetchFromGitHub, fetchpatch, zlib, expat, gettext
+, autoconf }:
 
 stdenv.mkDerivation rec {
-  name = "exiv2-0.24";
+  name = "exiv2-0.26.2018.12.30";
 
-  src = fetchurl {
-    url = "http://www.exiv2.org/${name}.tar.gz";
-    sha256 = "13pgvz14kyapxl89pxjaq3274k56d5lzfckpg1g9z7gvqzk4797l";
+    #url = "http://www.exiv2.org/builds/${name}-trunk.tar.gz";
+  src = fetchFromGitHub rec {
+    owner = "exiv2";
+    repo  = "exiv2";
+    rev = "f5d0b25"; # https://github.com/Exiv2/exiv2/commits/0.26
+    sha256 = "1blaz3g8dlij881g14nv2nsgr984wy6ypbwgi2pixk978p0gm70i";
   };
 
-  patches = [(fetchpatch {
-    name = "CVE-2014-9449.diff";
-    url = "http://dev.exiv2.org/projects/exiv2/repository/revisions/3264/diff?format=diff&rev_to=3263";
-    sha256 = "02w0fksl966d4v6bkg6rq3wmvv8xjpvfp47qr0nv1xq0bphxqzag";
-  })];
+  postPatch = "patchShebangs ./src/svn_version.sh";
 
-  propagatedBuildInputs = [zlib expat];
+  preConfigure = "make config"; # needed because not using tarball
 
-# configure script finds zlib&expat but it thinks that they're in /usr
-  configureFlags = "--with-zlib=${zlib} --with-expat=${expat}";
+  outputs = [ "out" "dev" ];
 
-  meta = {
+  nativeBuildInputs = [
+    gettext
+    autoconf # needed because not using tarball
+  ];
+  propagatedBuildInputs = [ zlib expat ];
+
+  meta = with stdenv.lib; {
     homepage = http://www.exiv2.org/;
     description = "A library and command-line utility to manage image metadata";
-    maintainers = [stdenv.lib.maintainers.urkud];
-    platforms = stdenv.lib.platforms.all;
+    platforms = platforms.all;
+    license = licenses.gpl2Plus;
   };
 }

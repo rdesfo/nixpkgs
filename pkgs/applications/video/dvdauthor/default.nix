@@ -18,9 +18,10 @@ stdenv.mkDerivation rec{
     ./dvdauthor-imagemagick-0.7.0.patch
   ];
 
-  meta = {
+  meta = with stdenv.lib; {
     description = "Tools for generating DVD files to be played on standalone DVD players";
     homepage = http://dvdauthor.sourceforge.net/;
-    license = ["GPLv2"];
+    license = licenses.gpl2;
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

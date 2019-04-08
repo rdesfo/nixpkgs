@@ -1,21 +1,24 @@
-{ stdenv, fetchurl, unzip, blas, liblapack, gfortran }:
+{ stdenv, fetchurl, unzip, openblas, gfortran }:
 
 stdenv.mkDerivation rec {
-  version = "3.12.1";
   name = "ipopt-${version}";
+  version = "3.12.12";
 
   src = fetchurl {
-    url = "http://www.coin-or.org/download/source/Ipopt/Ipopt-${version}.zip";
-    sha256 = "0x0wcc21d2bfs3zq8nvhva1nv7xi86wjbyixvvxvcrg2kqjlybdy";
+    url = "https://www.coin-or.org/download/source/Ipopt/Ipopt-${version}.zip";
+    sha256 = "1kh680ilw1c304hdh9i267gqhp0xg58jy8dk4svjvjc86sp1i23q";
   };
 
-  preConfigure = ''
-     export CXXDEFS="-DHAVE_RAND -DHAVE_CSTRING -DHAVE_CSTDIO"
-  '';
+  CXXDEFS = [ "-DHAVE_RAND" "-DHAVE_CSTRING" "-DHAVE_CSTDIO" ];
+
+  configureFlags = [
+    "--with-blas-lib=-lopenblas"
+    "--with-lapack-lib=-lopenblas"
+  ];
 
   nativeBuildInputs = [ unzip ];
 
-  buildInputs = [ gfortran blas liblapack ];
+  buildInputs = [ gfortran openblas ];
 
   enableParallelBuilding = true;
 

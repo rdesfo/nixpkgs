@@ -1,4 +1,4 @@
-{ stdenv, fetchurl }:
+{ stdenv, fetchurl, xcbuildHook, cf-private, Foundation, AddressBook }:
 
 stdenv.mkDerivation rec {
   version = "1.1a-3";
@@ -9,13 +9,17 @@ stdenv.mkDerivation rec {
     sha256 = "0wdqc1ndgrdhqapvvgx5xihc750szv08lp91x4l6n0gh59cpxpg3";
   };
 
-  preBuild = ''
-    substituteInPlace Makefile --replace "xcodebuild" "/usr/bin/xcodebuild"
-  '';
+  nativeBuildInputs = [ xcbuildHook ];
+
+  buildInputs = [
+    Foundation AddressBook
+    # Needed for OBJC_CLASS_$_NSArray symbols.
+    cf-private
+  ];
 
   installPhase = ''
     mkdir -p $out/bin
-    cp ./build/Deployment/contacts $out/bin
+    cp Products/Default/contacts $out/bin
   '';
 
   meta = with stdenv.lib; {

@@ -1,4 +1,4 @@
-{ stdenv, gmp, gnum4
+{ stdenv, buildPackages, gmp, gnum4
 
 # Version specific args
 , version, src
@@ -9,20 +9,21 @@ stdenv.mkDerivation (rec {
 
   inherit src;
 
-  buildInputs = [ gnum4 ];
+  outputs = [ "out" "dev" ];
+  outputBin = "dev";
+
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+  nativeBuildInputs = [ gnum4 ];
   propagatedBuildInputs = [ gmp ];
 
-  doCheck = (stdenv.system != "i686-cygwin" && !stdenv.isDarwin);
+  doCheck = (stdenv.hostPlatform.system != "i686-cygwin" && !stdenv.isDarwin);
 
   enableParallelBuilding = true;
 
-  # It doesn't build otherwise
-  dontDisableStatic = true;
-
-  patches = stdenv.lib.optional (stdenv.system == "i686-cygwin")
+  patches = stdenv.lib.optional (stdenv.hostPlatform.system == "i686-cygwin")
               ./cygwin.patch;
 
-  meta = {
+  meta = with stdenv.lib; {
     description = "Cryptographic library";
 
     longDescription = ''
@@ -48,12 +49,11 @@ stdenv.mkDerivation (rec {
         I/O.
      '';
 
-     license = stdenv.lib.licenses.gpl2Plus;
+     license = licenses.gpl2Plus;
 
      homepage = http://www.lysator.liu.se/~nisse/nettle/;
 
-     maintainers = [ ];
-     platforms = stdenv.lib.platforms.all;
+     platforms = platforms.all;
   };
 }
 
@@ -64,5 +64,5 @@ stdenv.lib.optionalAttrs stdenv.isSunOS {
   # /usr/include/mp.h from OpenSolaris.  See
   # <https://lists.gnu.org/archive/html/hydra-users/2012-08/msg00000.html>
   # for details.
-  configureFlags = [ "--with-include-path=${gmp}/include" ];
+  configureFlags = [ "--with-include-path=${gmp.dev}/include" ];
 })

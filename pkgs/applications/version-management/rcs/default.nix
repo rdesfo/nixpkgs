@@ -12,8 +12,10 @@ stdenv.mkDerivation rec {
 
   doCheck = true;
 
+  NIX_CFLAGS_COMPILE = [ "-std=c99" ];
+
   meta = {
-    homepage = http://www.gnu.org/software/rcs/;
+    homepage = https://www.gnu.org/software/rcs/;
     description = "Revision control system";
     longDescription =
       '' The GNU Revision Control System (RCS) manages multiple revisions of
@@ -24,7 +26,7 @@ stdenv.mkDerivation rec {
       '';
 
     license = stdenv.lib.licenses.gpl3Plus;
-    maintainers = with stdenv.lib.maintainers; [ eelco simons ];
-    platforms = stdenv.lib.platforms.all;
+    maintainers = with stdenv.lib.maintainers; [ eelco ];
+    platforms = stdenv.lib.platforms.linux;
   };
 }

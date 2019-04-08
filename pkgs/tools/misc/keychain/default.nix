@@ -1,26 +1,23 @@
 { stdenv, fetchFromGitHub, makeWrapper, coreutils, openssh, gnupg
-, procps, gnugrep, gawk, findutils, gnused }:
+, perl, procps, gnugrep, gawk, findutils, gnused }:
 
 stdenv.mkDerivation rec {
   name = "keychain-${version}";
-  version = "2.8.0";
+  version = "2.8.5";
 
   src = fetchFromGitHub {
     owner = "funtoo";
     repo = "keychain";
-    rev = "1c8eaba53a7788d12d086b66ac3929810510f73a";
-    sha256 = "0ajas58cv8mp5wb6hn1zhsqiwfxvx69p4f91a5j2as299rxgrxlp";
+    rev = "${version}";
+    sha256 = "1bkjlg0a2bbdjhwp37ci1rwikvrl4s3xlbf2jq2z4azc96dr83mj";
   };
 
-  phases = [ "unpackPhase" "patchPhase" "buildPhase" ];
+  buildInputs = [ makeWrapper perl ];
 
-  buildInputs = [ makeWrapper ];
-
-  patchPhase = "sed -i -e 's,version=.*,version=\"${version}\",g' keychain.sh";
-
-  buildPhase = ''
-    mkdir -p $out/bin
-    cp keychain.sh $out/bin/keychain
+  installPhase = ''
+    mkdir -p $out/{bin,share/man/man1}
+    cp keychain $out/bin/keychain
+    cp keychain.1 $out/share/man/man1
     wrapProgram $out/bin/keychain \
       --prefix PATH ":" "${coreutils}/bin" \
       --prefix PATH ":" "${openssh}/bin" \
@@ -34,7 +31,12 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "Keychain management tool";
-    homepage = "http://www.funtoo.org/Keychain";
+    homepage = https://www.funtoo.org/Keychain;
     license = stdenv.lib.licenses.gpl2;
+    # other platforms are untested (AFAIK)
+    platforms =
+      with stdenv.lib;
+      platforms.linux ++ platforms.darwin;
+    maintainers = with stdenv.lib.maintainers; [ sigma ];
   };
 }

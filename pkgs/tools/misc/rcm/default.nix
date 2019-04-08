@@ -1,13 +1,14 @@
 { stdenv, fetchurl }:
 
-stdenv.mkDerivation {
-  name = "rcm-1.2.3";
+stdenv.mkDerivation rec {
+  name = "rcm-${version}";
+  version = "1.3.3";
 
   src = fetchurl {
-    url = https://thoughtbot.github.io/rcm/dist/rcm-1.2.3.tar.gz;
-    sha256 = "0gwpclbc152jkclj3w83s2snx3dcgljwr75q1z8czl3yar7d8bsh";
+    url = "https://thoughtbot.github.io/rcm/dist/rcm-${version}.tar.gz";
+    sha256 = "1bqk7rrp1ckzvsvl9wghsr77m8xl3a7yc5gqdsisz492dx2j8mck";
   };
- 
+
   patches = [ ./fix-rcmlib-path.patch ];
 
   postPatch = ''
@@ -21,5 +22,6 @@ stdenv.mkDerivation {
     homepage = https://github.com/thoughtbot/rcm;
     license = licenses.bsd3;
     maintainers = with maintainers; [ malyn ];
+    platforms = with platforms; unix;
   };
 }

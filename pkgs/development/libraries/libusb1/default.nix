@@ -1,22 +1,35 @@
-{ stdenv, fetchurl, pkgconfig, udev ? null }:
+{ stdenv, fetchurl, pkgconfig, systemd ? null, libobjc, IOKit }:
 
 stdenv.mkDerivation rec {
-  name = "libusb-1.0.19";
+  name = "libusb-1.0.22";
 
   src = fetchurl {
     url = "mirror://sourceforge/libusb/${name}.tar.bz2";
-    sha256 = "0h38p9rxfpg9vkrbyb120i1diq57qcln82h5fr7hvy82c20jql3c";
+    sha256 = "0mw1a5ss4alg37m6bd4k44v35xwrcwp5qm4s686q1nsgkbavkbkm";
   };
 
-  buildInputs = [ pkgconfig ];
-  propagatedBuildInputs = stdenv.lib.optional stdenv.isLinux udev;
+  outputs = [ "out" "dev" ]; # get rid of propagating systemd closure
+
+  nativeBuildInputs = [ pkgconfig ];
+  propagatedBuildInputs =
+    stdenv.lib.optional stdenv.isLinux systemd ++
+    stdenv.lib.optionals stdenv.isDarwin [ libobjc IOKit ];
 
   NIX_LDFLAGS = stdenv.lib.optionalString stdenv.isLinux "-lgcc_s";
 
-  meta = {
-    homepage = http://www.libusb.info;
-    description = "User-space USB library";
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.urkud ];
+  preFixup = stdenv.lib.optionalString stdenv.isLinux ''
+    sed 's,-ludev,-L${systemd.lib}/lib -ludev,' -i $out/lib/libusb-1.0.la
+  '';
+
+  meta = with stdenv.lib; {
+    homepage = "https://libusb.info/";
+    repositories.git = "https://github.com/libusb/libusb";
+    description = "cross-platform user-mode USB device library";
+    longDescription = ''
+      libusb is a cross-platform user-mode library that provides access to USB devices.
+    '';
+    platforms = platforms.all;
+    license = licenses.lgpl21Plus;
+    maintainers = [ ];
   };
 }

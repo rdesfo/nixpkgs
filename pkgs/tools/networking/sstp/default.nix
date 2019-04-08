@@ -2,11 +2,11 @@
 
 stdenv.mkDerivation rec {
   name = "sstp-client-${version}";
-  version = "1.0.9";
+  version = "1.0.11";
 
   src = fetchurl {
     url = "mirror://sourceforge/sstp-client/sstp-client/${version}/sstp-client-${version}.tar.gz";
-    sha256 = "0kpwywbavmlgid07rk8ff0bxp75bnfa1nc28w4j0pkxjhmja5n6k";
+    sha256 = "087vp3n7nv001fsgbmkjpgl3a2vhbix22cflrqi5bv9h8181p18v";
   };
 
   patchPhase =
@@ -16,7 +16,7 @@ stdenv.mkDerivation rec {
     '';
 
   configureFlags = [
-    "--with-openssl=${openssl}"
+    "--with-openssl=${openssl.dev}"
     "--with-runtime-dir=/run/sstpc"
     "--with-pppd-plugin-dir=$(out)/lib/pppd"
   ];
@@ -28,5 +28,6 @@ stdenv.mkDerivation rec {
     homepage = http://sstp-client.sourceforge.net/;
     platforms = stdenv.lib.platforms.linux;
     maintainers = [ stdenv.lib.maintainers.ktosiek ];
+    license = stdenv.lib.licenses.gpl2;
   };
 }

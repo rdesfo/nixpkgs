@@ -1,16 +1,11 @@
-{ stdenv, fetchurl, autoreconfHook }:
+{ stdenv, autoreconfHook, ghostscript }:
 
-let version = "9.15";
-in
 stdenv.mkDerivation {
-  name = "ijs-${version}";
+  name = "ijs-${ghostscript.version}";
 
-  src = fetchurl {
-    url = "http://downloads.ghostscript.com/public/ghostscript-${version}.tar.bz2";
-    sha256 = "0p1isp6ssfay141klirn7n9s8b546vcz6paksfmksbwy0ljsypg6";
-  };
+  inherit (ghostscript) src;
 
-  prePatch = "cd ijs";
+  postPatch = "cd ijs";
 
   enableParallelBuilding = true;
 

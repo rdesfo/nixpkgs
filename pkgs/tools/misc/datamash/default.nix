@@ -1,18 +1,20 @@
-{stdenv, fetchurl}:
+{ stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
   name = "datamash-${version}";
-  version = "1.0.6";
+  version = "1.4";
 
   src = fetchurl {
-    url = "http://ftp.gnu.org/gnu/datamash/${name}.tar.gz";
-    sha256 = "0154c25c45b5506b6d618ca8e18d0ef093dac47946ac0df464fb21e77b504118";
+    url = "mirror://gnu/datamash/${name}.tar.gz";
+    sha256 = "fa44dd2d5456bcb94ef49dfc6cfe62c83fd53ac435119a85d34e6812f6e6472a";
   };
 
-  meta = {
-    description = "GNU datamash";
-    homepage = http://www.gnu.org/software/datamash/;
-    platforms = stdenv.lib.platforms.all;
+  meta = with stdenv.lib; {
+    description = "A command-line program which performs basic numeric,textual and statistical operations on input textual data files";
+    homepage = https://www.gnu.org/software/datamash/;
+    license = licenses.gpl3Plus;
+    platforms = platforms.all;
+    maintainers = with maintainers; [ pSub vrthra ];
   };
 
 }

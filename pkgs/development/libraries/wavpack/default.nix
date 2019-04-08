@@ -1,12 +1,16 @@
-{ stdenv, fetchurl }:
+{ stdenv, fetchurl, libiconv }:
 
 stdenv.mkDerivation rec {
   name = "wavpack-${version}";
-  version = "4.70.0";
+  version = "5.1.0";
+
+  enableParallelBuilding = true;
+
+  buildInputs = stdenv.lib.optional stdenv.isDarwin libiconv;
 
   src = fetchurl {
     url = "http://www.wavpack.com/${name}.tar.bz2";
-    sha256 = "191h8hv8qk72hfh1crg429i9yq3cminwqb249sy9zadbn1wy7b9c";
+    sha256 = "0i19c6krc0p9krwrqy9s5xahaafigqzxcn31piidmlaqadyn4f8r";
   };
 
   meta = with stdenv.lib; {

@@ -6,15 +6,29 @@ let
 
   mainCfg = config.services.httpd;
 
-  httpd = mainCfg.package;
+  httpd = mainCfg.package.out;
 
   version24 = !versionOlder httpd.version "2.4";
 
   httpdConf = mainCfg.configFile;
 
-  php = pkgs.php.override { apacheHttpd = httpd; };
+  php = mainCfg.phpPackage.override { apacheHttpd = httpd.dev; /* otherwise it only gets .out */ };
 
-  getPort = cfg: if cfg.port != 0 then cfg.port else if cfg.enableSSL then 443 else 80;
+  phpMajorVersion = head (splitString "." php.version);
+
+  mod_perl = pkgs.apacheHttpdPackages.mod_perl.override { apacheHttpd = httpd; };
+
+  defaultListen = cfg: if cfg.enableSSL
+    then [{ip = "*"; port = 443;}]
+    else [{ip = "*"; port = 80;}];
+
+  getListen = cfg:
+    let list = (lib.optional (cfg.port != 0) {ip = "*"; port = cfg.port;}) ++ cfg.listen;
+    in if list == []
+        then defaultListen cfg
+        else list;
+
+  listenToString = l: "${l.ip}:${toString l.port}";
 
   extraModules = attrByPath ["extraModules"] [] mainCfg;
   extraForeignModules = filter isAttrs extraModules;
@@ -23,10 +37,13 @@ let
 
   makeServerInfo = cfg: {
     # Canonical name must not include a trailing slash.
-    canonicalName =
-      (if cfg.enableSSL then "https" else "http") + "://" +
-      cfg.hostName +
-      (if getPort cfg != (if cfg.enableSSL then 443 else 80) then ":${toString (getPort cfg)}" else "");
+    canonicalNames =
+      let defaultPort = (head (defaultListen cfg)).port; in
+      map (port:
+        (if cfg.enableSSL then "https" else "http") + "://" +
+        cfg.hostName +
+        (if port != defaultPort then ":${toString port}" else "")
+        ) (map (x: x.port) (getListen cfg));
 
     # Admin address: inherit from the main server if not specified for
     # a virtual host.
@@ -46,6 +63,8 @@ let
       let
         svcFunction =
           if svc ? function then svc.function
+          # instead of using serviceType="mediawiki"; you can copy mediawiki.nix to any location outside nixpkgs, modify it at will, and use serviceExpression=./mediawiki.nix;
+          else if svc ? serviceExpression then import (toString svc.serviceExpression)
           else import (toString "${toString ./.}/${if svc ? serviceType then svc.serviceType else svc.serviceName}.nix");
         config = (evalModules
           { modules = [ { options = res.options; config = svc.config or svc; } ];
@@ -61,6 +80,7 @@ let
           robotsEntries = "";
           startupScript = "";
           enablePHP = false;
+          enablePerl = false;
           phpOptions = "";
           options = {};
           documentRoot = null;
@@ -76,11 +96,6 @@ let
   mainSubservices = subservicesFor mainCfg;
 
   allSubservices = mainSubservices ++ concatMap subservicesFor mainCfg.virtualHosts;
-
-
-  # !!! should be in lib
-  writeTextInDir = name: text:
-    pkgs.runCommand name {inherit text;} "mkdir -p $out; echo -n \"$text\" > $out/$name";
 
 
   enableSSL = any (vhost: vhost.enableSSL) allHosts;
@@ -136,7 +151,7 @@ let
 
 
   loggingConf = (if mainCfg.logFormat != "none" then ''
-    ErrorLog ${mainCfg.logDir}/error_log
+    ErrorLog ${mainCfg.logDir}/error.log
 
     LogLevel notice
 
@@ -145,7 +160,7 @@ let
     LogFormat "%{Referer}i -> %U" referer
     LogFormat "%{User-agent}i" agent
 
-    CustomLog ${mainCfg.logDir}/access_log ${mainCfg.logFormat}
+    CustomLog ${mainCfg.logDir}/access.log ${mainCfg.logFormat}
   '' else ''
     ErrorLog /dev/null
   '');
@@ -172,8 +187,9 @@ let
     SSLRandomSeed startup builtin
     SSLRandomSeed connect builtin
 
-    SSLProtocol All -SSLv2 -SSLv3
-    SSLCipherSuite HIGH:MEDIUM:!aNULL:!MD5:!EXP
+    SSLProtocol ${mainCfg.sslProtocols}
+    SSLCipherSuite ${mainCfg.sslCiphers}
+    SSLHonorCipherOrder on
   '';
 
 
@@ -187,9 +203,6 @@ let
     <IfModule mod_mime_magic.c>
         MIMEMagicFile ${httpd}/conf/magic
     </IfModule>
-
-    AddEncoding x-compress Z
-    AddEncoding x-gzip gz tgz
   '';
 
 
@@ -204,7 +217,7 @@ let
     ) null ([ cfg ] ++ subservices);
 
     documentRoot = if maybeDocumentRoot != null then maybeDocumentRoot else
-      pkgs.runCommand "empty" {} "mkdir -p $out";
+      pkgs.runCommand "empty" { preferLocalBuild = true; } "mkdir -p $out";
 
     documentRootConf = ''
       DocumentRoot "${documentRoot}"
@@ -224,7 +237,7 @@ let
         ++ (map (svc: svc.robotsEntries) subservices)));
 
   in ''
-    ServerName ${serverInfo.canonicalName}
+    ${concatStringsSep "\n" (map (n: "ServerName ${n}") serverInfo.canonicalNames)}
 
     ${concatMapStrings (alias: "ServerAlias ${alias}\n") cfg.serverAliases}
 
@@ -248,8 +261,8 @@ let
     '' else ""}
 
     ${if !isMainServer && mainCfg.logPerVirtualHost then ''
-      ErrorLog ${mainCfg.logDir}/error_log-${cfg.hostName}
-      CustomLog ${mainCfg.logDir}/access_log-${cfg.hostName} ${cfg.logFormat}
+      ErrorLog ${mainCfg.logDir}/error-${cfg.hostName}.log
+      CustomLog ${mainCfg.logDir}/access-${cfg.hostName}.log ${cfg.logFormat}
     '' else ""}
 
     ${optionalString (robotsTxt != "") ''
@@ -326,9 +339,10 @@ let
     </IfModule>
 
     ${let
-        ports = map getPort allHosts;
-        uniquePorts = uniqList {inputList = ports;};
-      in concatMapStrings (port: "Listen ${toString port}\n") uniquePorts
+        listen = concatMap getListen allHosts;
+        toStr = listen: "Listen ${listenToString listen}\n";
+        uniqueListen = uniqList {inputList = map toStr listen;};
+      in concatStrings uniqueListen
     }
 
     User ${mainCfg.user}
@@ -339,7 +353,9 @@ let
         allModules =
           concatMap (svc: svc.extraModulesPre) allSubservices
           ++ map (name: {inherit name; path = "${httpd}/modules/mod_${name}.so";}) apacheModules
-          ++ optional enablePHP { name = "php5"; path = "${php}/modules/libphp5.so"; }
+          ++ optional mainCfg.enableMellon { name = "auth_mellon"; path = "${pkgs.apacheHttpdPackages.mod_auth_mellon}/modules/mod_auth_mellon.so"; }
+          ++ optional enablePHP { name = "php${phpMajorVersion}"; path = "${php}/modules/libphp${phpMajorVersion}.so"; }
+          ++ optional enablePerl { name = "perl"; path = "${mod_perl}/modules/mod_perl.so"; }
           ++ concatMap (svc: svc.extraModules) allSubservices
           ++ extraForeignModules;
       in concatMapStrings load allModules
@@ -359,6 +375,8 @@ let
     Include ${httpd}/conf/extra/httpd-autoindex.conf
     Include ${httpd}/conf/extra/httpd-multilang-errordoc.conf
     Include ${httpd}/conf/extra/httpd-languages.conf
+
+    TraceEnable off
 
     ${if enableSSL then sslConf else ""}
 
@@ -381,15 +399,15 @@ let
 
     # Always enable virtual hosts; it doesn't seem to hurt.
     ${let
-        ports = map getPort allHosts;
-        uniquePorts = uniqList {inputList = ports;};
-        directives = concatMapStrings (port: "NameVirtualHost *:${toString port}\n") uniquePorts;
+        listen = concatMap getListen allHosts;
+        uniqueListen = uniqList {inputList = listen;};
+        directives = concatMapStrings (listen: "NameVirtualHost ${listenToString listen}\n") uniqueListen;
       in optionalString (!version24) directives
     }
 
     ${let
         makeVirtualHost = vhost: ''
-          <VirtualHost *:${toString (getPort vhost)}>
+          <VirtualHost ${concatStringsSep " " (map listenToString (getListen vhost))}>
               ${perServerConf false vhost}
           </VirtualHost>
         '';
@@ -400,15 +418,18 @@ let
 
   enablePHP = mainCfg.enablePHP || any (svc: svc.enablePHP) allSubservices;
 
+  enablePerl = mainCfg.enablePerl || any (svc: svc.enablePerl) allSubservices;
+
 
   # Generate the PHP configuration file.  Should probably be factored
   # out into a separate module.
   phpIni = pkgs.runCommand "php.ini"
     { options = concatStringsSep "\n"
         ([ mainCfg.phpOptions ] ++ (map (svc: svc.phpOptions) allSubservices));
+      preferLocalBuild = true;
     }
     ''
-      cat ${php}/etc/php-recommended.ini > $out
+      cat ${php}/etc/php.ini > $out
       echo "$options" >> $out
     '';
 
@@ -432,6 +453,7 @@ in
       package = mkOption {
         type = types.package;
         default = pkgs.apacheHttpd;
+        defaultText = "pkgs.apacheHttpd";
         description = ''
           Overridable attribute of the Apache HTTP Server package to use.
         '';
@@ -440,7 +462,8 @@ in
       configFile = mkOption {
         type = types.path;
         default = confFile;
-        example = literalExample ''pkgs.writeText "httpd.conf" "# my custom config file ...";'';
+        defaultText = "confFile";
+        example = literalExample ''pkgs.writeText "httpd.conf" "# my custom config file ..."'';
         description = ''
           Override the configuration file used by Apache. By default,
           NixOS generates one automatically.
@@ -475,8 +498,8 @@ in
         default = false;
         description = ''
           If enabled, each virtual host gets its own
-          <filename>access_log</filename> and
-          <filename>error_log</filename>, namely suffixed by the
+          <filename>access.log</filename> and
+          <filename>error.log</filename>, namely suffixed by the
           <option>hostName</option> of the virtual host.
         '';
       };
@@ -541,10 +564,31 @@ in
         '';
       };
 
+      enableMellon = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Whether to enable the mod_auth_mellon module.";
+      };
+
       enablePHP = mkOption {
         type = types.bool;
         default = false;
         description = "Whether to enable the PHP module.";
+      };
+
+      phpPackage = mkOption {
+        type = types.package;
+        default = pkgs.php;
+        defaultText = "pkgs.php";
+        description = ''
+          Overridable attribute of the PHP package to use.
+        '';
+      };
+
+      enablePerl = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Whether to enable the Perl module (mod_perl).";
       };
 
       phpOptions = mkOption {
@@ -589,6 +633,19 @@ in
         description =
           "Maximum number of httpd requests answered per httpd child (prefork), 0 means unlimited";
       };
+
+      sslCiphers = mkOption {
+        type = types.str;
+        default = "HIGH:!aNULL:!MD5:!EXP";
+        description = "Cipher Suite available for negotiation in SSL proxy handshake.";
+      };
+
+      sslProtocols = mkOption {
+        type = types.str;
+        default = "All -SSLv2 -SSLv3 -TLSv1";
+        example = "All -SSLv2 -SSLv3";
+        description = "Allowed SSL/TLS protocol versions.";
+      };
     }
 
     # Include the options shared between the main server and virtual hosts.
@@ -610,14 +667,16 @@ in
                      message = "SSL is enabled for httpd, but sslServerCert and/or sslServerKey haven't been specified."; }
                  ];
 
-    users.extraUsers = optionalAttrs (mainCfg.user == "wwwrun") (singleton
+    warnings = map (cfg: ''apache-httpd's port option is deprecated. Use listen = [{/*ip = "*"; */ port = ${toString cfg.port};}]; instead'' ) (lib.filter (cfg: cfg.port != 0) allHosts);
+
+    users.users = optionalAttrs (mainCfg.user == "wwwrun") (singleton
       { name = "wwwrun";
         group = mainCfg.group;
         description = "Apache httpd user";
         uid = config.ids.uids.wwwrun;
       });
 
-    users.extraGroups = optionalAttrs (mainCfg.group == "wwwrun") (singleton
+    users.groups = optionalAttrs (mainCfg.group == "wwwrun") (singleton
       { name = "wwwrun";
         gid = config.ids.gids.wwwrun;
       });
@@ -628,6 +687,10 @@ in
       ''
         ; Needed for PHP's mail() function.
         sendmail_path = sendmail -t -i
+
+        ; Don't advertise PHP
+        expose_php = off
+      '' + optionalString (!isNull config.time.timeZone) ''
 
         ; Apparently PHP doesn't use $TZ.
         date.timezone = "${config.time.timeZone}"
@@ -642,14 +705,12 @@ in
 
         path =
           [ httpd pkgs.coreutils pkgs.gnugrep ]
-          ++ # Needed for PHP's mail() function.  !!! Probably the
-             # ssmtp module should export the path to sendmail in
-             # some way.
-             optional config.networking.defaultMailServer.directDelivery pkgs.ssmtp
+          ++ optional enablePHP pkgs.system-sendmail # Needed for PHP's mail() function.
           ++ concatMap (svc: svc.extraServerPath) allSubservices;
 
         environment =
           optionalAttrs enablePHP { PHPRC = phpIni; }
+          // optionalAttrs mainCfg.enableMellon { LD_LIBRARY_PATH  = "${pkgs.xmlsec}/lib"; }
           // (listToAttrs (concatMap (svc: svc.globalEnvVars) allSubservices));
 
         preStart =
@@ -661,13 +722,6 @@ in
               [ $(id -u) != 0 ] || chown root.${mainCfg.group} "${mainCfg.stateDir}/runtime"
             ''}
             mkdir -m 0700 -p ${mainCfg.logDir}
-
-            ${optionalString (mainCfg.documentRoot != null)
-            ''
-              # Create the document root directory if does not exists yet
-              mkdir -p ${mainCfg.documentRoot}
-            ''
-            }
 
             # Get rid of old semaphores.  These tend to accumulate across
             # server restarts, eventually preventing it from restarting
@@ -685,6 +739,7 @@ in
 
         serviceConfig.ExecStart = "@${httpd}/bin/httpd httpd -f ${httpdConf}";
         serviceConfig.ExecStop = "${httpd}/bin/httpd -f ${httpdConf} -k graceful-stop";
+        serviceConfig.ExecReload = "${httpd}/bin/httpd -f ${httpdConf} -k graceful";
         serviceConfig.Type = "forking";
         serviceConfig.PIDFile = "${mainCfg.stateDir}/httpd.pid";
         serviceConfig.Restart = "always";
@@ -692,5 +747,4 @@ in
       };
 
   };
-
 }

@@ -1,14 +1,14 @@
-{ config, pkgs, lib, ... }:
+{ lib, ... }:
 
 with lib;
 
 {
   imports = [
-    ../profiles/container.nix
+    ../profiles/docker-container.nix # FIXME, shouldn't include something from profiles/
   ];
 
   # Allow the user to login as root without password.
-  users.extraUsers.root.initialHashedPassword = mkOverride 150 "";
+  users.users.root.initialHashedPassword = mkOverride 150 "";
 
   # Some more help text.
   services.mingetty.helpLine =

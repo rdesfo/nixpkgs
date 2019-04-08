@@ -1,29 +1,32 @@
-{ stdenv, fetchgit, pkgconfig, autoconf, automake
+{ stdenv, fetchgit, pkgconfig, autoreconfHook
 , libX11, pam, libgcrypt, libXrender, imlib2 }:
 
 stdenv.mkDerivation rec {
-  date = "20141209";
+  date = "20170720";
   name = "alock-${date}";
 
   src = fetchgit {
     url = https://github.com/Arkq/alock;
-    rev = "5ab7e6014faa1659c2d55bf9734bfa3ce7137443";
-    sha256 = "07wf3vxh54ncxslp3zf8m7szpqbissxf8q9rs5zgvg333zdqd49s";
+    rev = "2035e1d4a2293432f5503e82d10f899232eb0f38";
+    sha256 = "1by954fjn0ryqda89zlmq3gclakg3gz7zy1wjrbgw4lzsk538va6";
   };
 
-  preConfigure = "autoreconf -fvi";
+  PAM_DEFAULT_SERVICE = "login";
+
   configureFlags = [
     "--enable-pam"
     "--enable-hash"
     "--enable-xrender"
     "--enable-imlib2"
   ];
+
+  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    pkgconfig autoconf automake libX11
+    autoreconfHook libX11
     pam libgcrypt libXrender imlib2
   ];
 
-  meta = {
+  meta = with stdenv.lib; {
     homepage = https://github.com/Arkq/alock;
     description = "Simple screen lock application for X server";
     longDescription = ''
@@ -32,10 +35,11 @@ stdenv.mkDerivation rec {
       the X server is unlocked and the user can continue to work.
 
       alock does not provide any fancy animations like xlock or
-      xscreensaver and never will. Its just for locking the current
+      xscreensaver and never will. It's just for locking the current
       X session.
     '';
-    platforms = with stdenv.lib.platforms; allBut cygwin;
-    maintainers = [ stdenv.lib.maintainers.ftrvxmtrx ];
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ ftrvxmtrx chris-martin ];
+    license = licenses.mit;
   };
 }

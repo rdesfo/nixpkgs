@@ -1,29 +1,31 @@
-{ stdenv, fetchurl, python, isPyPy }:
+{ lib, fetchurl, buildPythonPackage, python, isPyPy, sip-module ? "sip" }:
 
-if isPyPy then throw "sip not supported for interpreter ${python.executable}" else stdenv.mkDerivation rec {
-  name = "sip-4.14.7"; # kde410.pykde4 doesn't build with 4.15
+buildPythonPackage rec {
+  pname = sip-module;
+  version = "4.19.13";
+  format = "other";
+
+  disabled = isPyPy;
 
   src = fetchurl {
-    url = "mirror://sourceforge/pyqt/sip/${name}/${name}.tar.gz";
-    sha256 = "1dv1sdwfmnq481v80k2951amzs9s87d4qhk0hpwrhb1sllh92rh5";
+    url = "mirror://sourceforge/pyqt/sip/sip-${version}/sip-${version}.tar.gz";
+    sha256 = "0pniq03jk1n5bs90yjihw3s3rsmjd8m89y9zbnymzgwrcl2sflz3";
   };
 
-  configurePhase = stdenv.lib.optionalString stdenv.isDarwin ''
-    # prevent sip from complaining about python not being built as a framework
-    sed -i -e 1564,1565d siputils.py
-  '' + ''
+  configurePhase = ''
     ${python.executable} ./configure.py \
+      --sip-module ${sip-module} \
       -d $out/lib/${python.libPrefix}/site-packages \
       -b $out/bin -e $out/include
   '';
 
-  buildInputs = [ python ];
+  enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Creates C++ bindings for Python modules";
     homepage    = "http://www.riverbankcomputing.co.uk/";
     license     = licenses.gpl2Plus;
-    maintainers = with maintainers; [ lovek323 sander urkud ];
+    maintainers = with maintainers; [ lovek323 sander ];
     platforms   = platforms.all;
   };
 }

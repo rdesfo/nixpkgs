@@ -1,59 +1,70 @@
-{ stdenv, fetchurl, pkgconfig, perl, perlXMLParser, gtk, libXft
-, libpng, zlib, popt, boehmgc, libxml2, libxslt, glib, gtkmm
-, glibmm, libsigcxx, lcms, boost, gettext, makeWrapper, intltool
-, gsl, python, pyxml, lxml, poppler, imagemagick, libwpg, librevenge
-, libvisio, libcdr, libexif
+{ stdenv, fetchurl, pkgconfig, perlPackages, libXft
+, libpng, zlib, popt, boehmgc, libxml2, libxslt, glib, gtkmm2
+, glibmm, libsigcxx, lcms, boost, gettext, makeWrapper
+, gsl, python2, poppler, imagemagick, libwpg, librevenge
+, libvisio, libcdr, libexif, potrace, cmake, hicolor-icon-theme
 }:
 
+let
+  python2Env = python2.withPackages(ps: with ps;
+    [ numpy lxml scour ]);
+in
+
 stdenv.mkDerivation rec {
-  name = "inkscape-0.91";
+  name = "inkscape-0.92.4";
 
   src = fetchurl {
-    url = "https://inkscape.global.ssl.fastly.net/media/resources/file/"
-        + "${name}.tar.bz2";
-    sha256 = "06ql3x732x2rlnanv0a8aharsnj91j5kplksg574090rks51z42d";
+    url = "https://media.inkscape.org/dl/resources/file/${name}.tar.bz2";
+    sha256 = "0pjinhjibfsz1aywdpgpj3k23xrsszpj4a1ya5562dkv2yl2vv2p";
   };
+
+  # Inkscape hits the ARGMAX when linking on macOS. It appears to be
+  # CMake’s ARGMAX check doesn’t offer enough padding for NIX_LDFLAGS.
+  # Setting strictDeps it avoids duplicating some dependencies so it
+  # will leave us under ARGMAX.
+  strictDeps = true;
+
+  unpackPhase = ''
+    cp $src ${name}.tar.bz2
+    tar xvjf ${name}.tar.bz2 > /dev/null
+    cd ${name}
+  '';
 
   postPatch = ''
     patchShebangs share/extensions
-  ''
-  # Clang gets misdetected, so hardcode the right answer
-  + stdenv.lib.optionalString (stdenv.cc.cc.isClang or false) ''
-    substituteInPlace src/ui/tool/node.h \
-      --replace "#if __cplusplus >= 201103L" "#if true"
-  '';
+    patchShebangs fix-roff-punct
 
-  propagatedBuildInputs = [
     # Python is used at run-time to execute scripts, e.g., those from
     # the "Effects" menu.
-    python pyxml lxml
-  ];
+    substituteInPlace src/extension/implementation/script.cpp \
+      --replace '"python-interpreter", "python"' '"python-interpreter", "${python2Env}/bin/python"'
+  '';
 
+  nativeBuildInputs = [ pkgconfig cmake makeWrapper python2Env ]
+    ++ (with perlPackages; [ perl XMLParser ]);
   buildInputs = [
-    pkgconfig perl perlXMLParser gtk libXft libpng zlib popt boehmgc
-    libxml2 libxslt glib gtkmm glibmm libsigcxx lcms boost gettext
-    makeWrapper intltool gsl poppler imagemagick libwpg librevenge
-    libvisio libcdr libexif
+    libXft libpng zlib popt boehmgc
+    libxml2 libxslt glib gtkmm2 glibmm libsigcxx lcms boost gettext
+    gsl poppler imagemagick libwpg librevenge
+    libvisio libcdr libexif potrace hicolor-icon-theme
+
+    python2Env perlPackages.perl
   ];
 
   enableParallelBuilding = true;
-  doCheck = true;
 
-  postInstall = ''
-    # Make sure PyXML modules can be found at run-time.
-    for i in "$out/bin/"*
-    do
-      wrapProgram "$i" --prefix PYTHONPATH :      \
-       "$(toPythonPath ${pyxml}):$(toPythonPath ${lxml})"  \
-       --prefix PATH : ${python}/bin ||  \
-        exit 2
-    done
-    rm "$out/share/icons/hicolor/icon-theme.cache"
+  # Make sure PyXML modules can be found at run-time.
+  postInstall = stdenv.lib.optionalString stdenv.isDarwin ''
+    install_name_tool -change $out/lib/libinkscape_base.dylib $out/lib/inkscape/libinkscape_base.dylib $out/bin/inkscape
+    install_name_tool -change $out/lib/libinkscape_base.dylib $out/lib/inkscape/libinkscape_base.dylib $out/bin/inkview
   '';
+
+  # 0.92.3 complains about an invalid conversion from const char * to char *
+  NIX_CFLAGS_COMPILE = " -fpermissive ";
 
   meta = with stdenv.lib; {
     license = "GPL";
-    homepage = http://www.inkscape.org;
+    homepage = https://www.inkscape.org;
     description = "Vector graphics editor";
     platforms = platforms.all;
     longDescription = ''

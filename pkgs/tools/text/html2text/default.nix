@@ -9,7 +9,9 @@ stdenv.mkDerivation {
   };
 
   preConfigure = ''
-    sed -i s,/bin/echo,echo, configure
+    substituteInPlace configure \
+        --replace /bin/echo echo \
+        --replace CXX=unknown ':'
   '';
 
   # the --prefix has no effect
@@ -21,10 +23,10 @@ stdenv.mkDerivation {
   '';
 
   meta = {
-    description = "html2text is a command line utility, written in C++, that converts HTML documents into plain text.";
+    description = "Convert HTML to plain text";
     homepage = http://www.mbayer.de/html2text/;
     license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
+    platforms = stdenv.lib.platforms.unix;
     maintainers = [ stdenv.lib.maintainers.eikek ];
   };
 }

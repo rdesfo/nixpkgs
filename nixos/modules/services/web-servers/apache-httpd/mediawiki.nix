@@ -43,7 +43,7 @@ let
         # Paths to external programs.
         $wgDiff3 = "${pkgs.diffutils}/bin/diff3";
         $wgDiff = "${pkgs.diffutils}/bin/diff";
-        $wgImageMagickConvertCommand = "${pkgs.imagemagick}/bin/convert";
+        $wgImageMagickConvertCommand = "${pkgs.imagemagick.out}/bin/convert";
 
         #$wgDebugLogFile = "/tmp/mediawiki_debug_log.txt";
 
@@ -83,19 +83,23 @@ let
 
   # Unpack Mediawiki and put the config file in its root directory.
   mediawikiRoot = pkgs.stdenv.mkDerivation rec {
-    name= "mediawiki-1.23.3";
+    name= "mediawiki-1.31.1";
 
     src = pkgs.fetchurl {
-      url = "http://download.wikimedia.org/mediawiki/1.23/${name}.tar.gz";
-      sha256 = "0l6798jwjwk2khfnm84mgc65ij53a8pnv30wdnn15ys4ivia4bpf";
+      url = "https://releases.wikimedia.org/mediawiki/1.31/${name}.tar.gz";
+      sha256 = "13x48clij21cmysjkpnx68vggchrdasqp7b290j87xlfgjhdhnnf";
     };
 
     skins = config.skins;
+    extensions = config.extensions;
 
     buildPhase =
       ''
         for skin in $skins; do
           cp -prvd $skin/* skins/
+        done
+        for extension in $extensions; do
+          cp -prvd $extension/* extensions/
         done
       ''; # */
 
@@ -107,14 +111,15 @@ let
         sed -i \
         -e 's|/bin/bash|${pkgs.bash}/bin/bash|g' \
         -e 's|/usr/bin/timeout|${pkgs.coreutils}/bin/timeout|g' \
-          $out/includes/limit.sh \
+          $out/includes/shell/limit.sh \
           $out/includes/GlobalFunctions.php
       '';
   };
 
-  mediawikiScripts = pkgs.runCommand "mediawiki-${config.id}-scripts"
-    { buildInputs = [ pkgs.makeWrapper ]; }
-    ''
+  mediawikiScripts = pkgs.runCommand "mediawiki-${config.id}-scripts" {
+      buildInputs = [ pkgs.makeWrapper ];
+      preferLocalBuild = true;
+    } ''
       mkdir -p $out/bin
       for i in changePassword.php createAndPromote.php userOptions.php edit.php nukePage.php update.php; do
         makeWrapper ${php}/bin/php $out/bin/mediawiki-${config.id}-$(basename $i .php) \
@@ -142,6 +147,7 @@ in
         RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} !-f
         RewriteCond %{DOCUMENT_ROOT}%{REQUEST_URI} !-d
         ${concatMapStringsSep "\n" (u: "RewriteCond %{REQUEST_URI} !^${u.urlPath}") serverInfo.vhostConfig.servedDirs}
+        ${concatMapStringsSep "\n" (u: "RewriteCond %{REQUEST_URI} !^${u.urlPath}") serverInfo.vhostConfig.servedFiles}
         RewriteRule ${if config.enableUploads
           then "!^/images"
           else "^.*\$"
@@ -286,7 +292,18 @@ in
         '';
     };
 
+    extensions = mkOption {
+      default = [];
+      type = types.listOf types.path;
+      description =
+        ''
+          List of paths whose content is copied to the 'extensions'
+          subdirectory of the MediaWiki installation.
+        '';
+    };
+
     extraConfig = mkOption {
+      type = types.lines;
       default = "";
       example =
         ''
@@ -295,7 +312,7 @@ in
       description = ''
         Any additional text to be appended to MediaWiki's
         configuration file.  This is a PHP script.  For configuration
-        settings, see <link xlink:href='http://www.mediawiki.org/wiki/Manual:Configuration_settings'/>.
+        settings, see <link xlink:href='https://www.mediawiki.org/wiki/Manual:Configuration_settings'/>.
       '';
     };
 

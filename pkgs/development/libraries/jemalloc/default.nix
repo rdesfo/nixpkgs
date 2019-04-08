@@ -1,18 +1,4 @@
-{ stdenv, fetchurl }:
-
-stdenv.mkDerivation rec {
-  name = "jemalloc-3.6.0";
-
-  src = fetchurl {
-    url = "http://www.canonware.com/download/jemalloc/${name}.tar.bz2";
-    sha256 = "1zl4vxxjvhg72bdl53sl0idz9wp18c6yzjdmqcnwm09wvmcj2v71";
-  };
-
-  meta = with stdenv.lib; {
-    homepage = http://www.canonware.com/jemalloc/index.html;
-    description = "a general purpose malloc(3) implementation that emphasizes fragmentation avoidance and scalable concurrency support";
-    license = licenses.bsd2;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ wkennington ];
-  };
+import ./common.nix {
+  version = "5.1.0";
+  sha256 = "0s3jpcyhzia8d4k0xyc67is78kg416p9yc3c2f9w6fhhqqffd5jk";
 }

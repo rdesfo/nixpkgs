@@ -1,72 +1,100 @@
-{ stdenv, fetchurl, fetchpatch, pkgconfig, libiconv, libintlOrEmpty
-, expat, zlib, libpng, pixman, fontconfig, freetype, xlibs
+{ config, stdenv, fetchurl, fetchpatch, pkgconfig, libiconv
+, libintl, expat, zlib, libpng, pixman, fontconfig, freetype, xorg
 , gobjectSupport ? true, glib
 , xcbSupport ? true # no longer experimental since 1.12
-, glSupport ? true, mesa_noglu ? null # mesa is no longer a big dependency
+, libGLSupported
+, glSupport ? config.cairo.gl or (libGLSupported && stdenv.isLinux && !stdenv.isAarch32 && !stdenv.isMips)
+, libGL ? null # libGLU_combined is no longer a big dependency
 , pdfSupport ? true
+, darwin
 }:
 
-assert glSupport -> mesa_noglu != null;
+assert glSupport -> libGL != null;
 
-with { inherit (stdenv.lib) optional optionals; };
-
-stdenv.mkDerivation rec {
-  name = "cairo-1.14.0";
+let
+  version = "1.16.0";
+  inherit (stdenv.lib) optional optionals;
+in stdenv.mkDerivation rec {
+  name = "cairo-${version}";
 
   src = fetchurl {
-    url = "http://cairographics.org/releases/${name}.tar.xz";
-    sha1 = "53cf589b983412ea7f78feee2e1ba9cea6e3ebae";
+    url = "https://cairographics.org/${if stdenv.lib.mod (builtins.fromJSON (stdenv.lib.versions.minor version)) 2 == 0 then "releases" else "snapshots"}/${name}.tar.xz";
+    sha256 = "0c930mk5xr2bshbdljv005j3j8zr47gqmkry3q6qgvqky6rjjysy";
   };
 
-  patches = [(fetchpatch {
-    name = "fix-racket.diff";
-    url = "http://cgit.freedesktop.org/cairo/patch/?id=2de69581c28bf115852037ca41eba13cb7335976";
-    sha256 = "0mk2fd9fwxqzravlmnbbrzwak15wqspn7609y0yn6qh87va5i0x4";
-  })];
+  patches = [
+    # Fixes CVE-2018-19876; see Nixpkgs issue #55384
+    # CVE information: https://nvd.nist.gov/vuln/detail/CVE-2018-19876
+    # Upstream PR: https://gitlab.freedesktop.org/cairo/cairo/merge_requests/5
+    #
+    # This patch is the merged commit from the above PR.
+    (fetchpatch {
+      name   = "CVE-2018-19876.patch";
+      url    = "https://gitlab.freedesktop.org/cairo/cairo/commit/6edf572ebb27b00d3c371ba5ae267e39d27d5b6d.patch";
+      sha256 = "112hgrrsmcwxh1r52brhi5lksq4pvrz4xhkzcf2iqp55jl2pb7n1";
+    })
+  ];
 
-  nativeBuildInputs = [ pkgconfig libiconv ] ++ libintlOrEmpty;
+  outputs = [ "out" "dev" "devdoc" ];
+  outputBin = "dev"; # very small
+
+  nativeBuildInputs = [
+    pkgconfig
+  ];
+
+  buildInputs = [
+    libiconv
+    libintl
+  ] ++ optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [
+    CoreGraphics
+    CoreText
+    ApplicationServices
+    Carbon
+  ]);
 
   propagatedBuildInputs =
-    with xlibs; [ xlibs.xlibs fontconfig expat freetype pixman zlib libpng ]
-    ++ optional (!stdenv.isDarwin) libXrender
+    with xorg; [ libXext fontconfig expat freetype pixman zlib libpng libXrender ]
     ++ optionals xcbSupport [ libxcb xcbutil ]
     ++ optional gobjectSupport glib
-    ++ optionals glSupport [ mesa_noglu ]
-    ;
+    ++ optional glSupport libGL
+    ; # TODO: maybe liblzo but what would it be for here?
 
-  configureFlags = [ "--enable-tee" ]
+  configureFlags = if stdenv.isDarwin then [
+    "--disable-dependency-tracking"
+    "--enable-quartz"
+    "--enable-quartz-font"
+    "--enable-quartz-image"
+    "--enable-ft"
+  ] else ([ "--enable-tee" ]
     ++ optional xcbSupport "--enable-xcb"
     ++ optional glSupport "--enable-gl"
     ++ optional pdfSupport "--enable-pdf"
-    ;
+  );
 
   preConfigure =
   # On FreeBSD, `-ldl' doesn't exist.
-    (stdenv.lib.optionalString stdenv.isFreeBSD
+    stdenv.lib.optionalString stdenv.isFreeBSD
        '' for i in "util/"*"/Makefile.in" boilerplate/Makefile.in
           do
             cat "$i" | sed -es/-ldl//g > t
             mv t "$i"
           done
-       '') 
-       +
+       ''
+    +
     ''
     # Work around broken `Requires.private' that prevents Freetype
     # `-I' flags to be propagated.
     sed -i "src/cairo.pc.in" \
-        -es'|^Cflags:\(.*\)$|Cflags: \1 -I${freetype}/include/freetype2 -I${freetype}/include|g'
+        -es'|^Cflags:\(.*\)$|Cflags: \1 -I${freetype.dev}/include/freetype2 -I${freetype.dev}/include|g'
     '';
 
   enableParallelBuilding = true;
 
-  # The default `--disable-gtk-doc' is ignored.
-  postInstall = "rm -rf $out/share/gtk-doc"
-    + stdenv.lib.optionalString stdenv.isDarwin (''
-      #newline
-    '' + glib.flattenInclude
-    );
+  doCheck = false; # fails
 
-  meta = {
+  postInstall = stdenv.lib.optionalString stdenv.isDarwin glib.flattenInclude;
+
+  meta = with stdenv.lib; {
     description = "A 2D graphics library with support for multiple output devices";
 
     longDescription = ''
@@ -83,8 +111,8 @@ stdenv.mkDerivation rec {
 
     homepage = http://cairographics.org/;
 
-    license = [ "LGPLv2+" "MPLv1" ];
+    license = with licenses; [ lgpl2Plus mpl10 ];
 
-    platforms = stdenv.lib.platforms.all;
+    platforms = platforms.all;
   };
 }

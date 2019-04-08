@@ -1,5 +1,9 @@
 { stdenv, fetchurl, which, pkgconfig, ocaml, findlib, imagemagick }:
 
+if stdenv.lib.versionAtLeast ocaml.version "4.06"
+then throw "magick is not available for OCaml ${ocaml.version}"
+else
+
 stdenv.mkDerivation {
   name = "ocaml-magick-0.34";
   src = fetchurl {
@@ -11,6 +15,8 @@ stdenv.mkDerivation {
   buildInputs = [ ocaml findlib imagemagick ];
 
   createFindlibDestdir = true;
+
+  preConfigure = "substituteInPlace Makefile --replace gcc $CC";
 
   installTargets = [ "find_install" ];
 

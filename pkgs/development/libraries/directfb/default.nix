@@ -1,5 +1,5 @@
 { stdenv, fetchurl, pkgconfig, perl, zlib, libjpeg, freetype, libpng, giflib
-, enableX11 ? true, xlibs
+, enableX11 ? true, xorg
 , enableSDL ? true, SDL }:
 
 let s = 
@@ -16,13 +16,13 @@ stdenv.mkDerivation {
     inherit (s) url sha256;
   };
 
-  nativeBuildInputs = [ perl ];
+  nativeBuildInputs = [ perl pkgconfig ];
 
-  buildInputs = [ pkgconfig zlib libjpeg freetype giflib libpng ]
+  buildInputs = [ zlib libjpeg freetype giflib libpng ]
     ++ stdenv.lib.optional enableSDL SDL
-    ++ stdenv.lib.optionals enableX11 (with xlibs; [
-      xproto libX11 libXext #xextproto
-      #renderproto libXrender
+    ++ stdenv.lib.optionals enableX11 (with xorg; [
+      xorgproto libX11 libXext
+      libXrender
     ]);
 
   NIX_LDFLAGS="-lgcc_s";

@@ -1,46 +1,45 @@
-{ stdenv, lib, bundler, fetchgit, bundlerEnv, defaultGemConfig, libiconv, ruby
-, tzdata, git
+{ stdenv, lib, fetchurl, fetchFromGitLab, bundlerEnv
+, ruby, tzdata, git, procps, nettools
+, gitlabEnterprise ? false
 }:
 
 let
-  gitlab = fetchgit {
-    url = "https://github.com/gitlabhq/gitlabhq.git";
-    rev = "477743a154e85c411e8a533980abce460b5669fc";
-    fetchSubmodules = false;
-    sha256 = "1gk77j886w6zvw5cawpgja6f87qirmjx7y4g5i3psxm4j67llxdp";
+  rubyEnv = bundlerEnv {
+    name = "gitlab-env-${version}";
+    inherit ruby;
+    gemdir = ./rubyEnv- + "${if gitlabEnterprise then "ee" else "ce"}";
+    groups = [ "default" "unicorn" "ed25519" "metrics" ];
   };
 
-  env = bundlerEnv {
-    name = "gitlab";
-    inherit ruby;
-    gemfile = ./Gemfile;
-    lockfile = ./Gemfile.lock;
-    gemset = ./gemset.nix;
-    meta = with lib; {
-      homepage = http://www.gitlab.com/;
-      platforms = platforms.linux;
-      maintainers = [ ];
-      license = licenses.mit;
+  flavour = if gitlabEnterprise then "ee" else "ce";
+  data = (builtins.fromJSON (builtins.readFile ./data.json)).${flavour};
+
+  version = data.version;
+  sources = {
+    gitlab = fetchFromGitLab {
+      owner = data.owner;
+      repo = data.repo;
+      rev = data.rev;
+      sha256 = data.repo_hash;
+    };
+    gitlabDeb = fetchurl {
+      url = data.deb_url;
+      sha256 = data.deb_hash;
     };
   };
-
 in
 
 stdenv.mkDerivation rec {
-  name = "gitlab-${version}";
-  version = "7.4.2";
-  buildInputs = [ ruby bundler tzdata git ];
-  unpackPhase = ''
-    runHook preUnpack
-    cp -r ${gitlab}/* .
-    chmod -R +w .
-    cp ${./Gemfile} Gemfile
-    cp ${./Gemfile.lock} Gemfile.lock
-    runHook postUnpack
-  '';
-  patches = [
-    ./remove-hardcoded-locations.patch
+  name = "gitlab${if gitlabEnterprise then "-ee" else ""}-${version}";
+
+  src = sources.gitlab;
+
+  buildInputs = [
+    rubyEnv rubyEnv.wrappedRuby rubyEnv.bundler tzdata git procps nettools
   ];
+
+  patches = [ ./remove-hardcoded-locations.patch ];
+
   postPatch = ''
     # For reasons I don't understand "bundle exec" ignores the
     # RAILS_ENV causing tests to be executed that fail because we're
@@ -48,29 +47,69 @@ stdenv.mkDerivation rec {
     # tests works though.:
     rm lib/tasks/test.rake
 
+    rm config/initializers/gitlab_shell_secret_token.rb
+
+    substituteInPlace app/controllers/admin/background_jobs_controller.rb \
+        --replace "ps -U" "${procps}/bin/ps -U"
+
+    sed -i '/ask_to_continue/d' lib/tasks/gitlab/two_factor.rake
+    sed -ri -e '/log_level/a config.logger = Logger.new(STDERR)' config/environments/production.rb
+  '';
+
+  buildPhase = ''
     mv config/gitlab.yml.example config/gitlab.yml
 
-    # required for some gems:
-    cat > config/database.yml <<EOF
-      production:
-        adapter: postgresql
-        database: gitlab
-        host: <%= ENV["GITLAB_DATABASE_HOST"] || "127.0.0.1" %>
-        password: <%= ENV["GITLAB_DATABASE_PASSWORD"] || "blerg" %>
-        username: gitlab
-        encoding: utf8
-    EOF
+    # Building this requires yarn, node &c, so we just get it from the deb
+    ar p ${sources.gitlabDeb} data.tar.gz | gunzip > gitlab-deb-data.tar
+    # Work around unpacking deb containing binary with suid bit
+    tar -f gitlab-deb-data.tar --delete ./opt/gitlab/embedded/bin/ksu
+    tar -xf gitlab-deb-data.tar
+
+    mv -v opt/gitlab/embedded/service/gitlab-rails/public/assets public
+    rm -rf opt # only directory in data.tar.gz
+
+    mv config/gitlab.yml config/gitlab.yml.example
+    rm -f config/secrets.yml
+    mv config config.dist
   '';
-  buildPhase = ''
-    export GEM_HOME=${env}/${ruby.gemPath}
-    bundle exec rake assets:precompile RAILS_ENV=production
-  '';
+
   installPhase = ''
+    rm -r tmp
     mkdir -p $out/share
     cp -r . $out/share/gitlab
+    rm -rf $out/share/gitlab/log
+    ln -sf /run/gitlab/log $out/share/gitlab/log
+    ln -sf /run/gitlab/uploads $out/share/gitlab/public/uploads
+    ln -sf /run/gitlab/config $out/share/gitlab/config
+    ln -sf /run/gitlab/tmp $out/share/gitlab/tmp
+
+    # rake tasks to mitigate CVE-2017-0882
+    # see https://about.gitlab.com/2017/03/20/gitlab-8-dot-17-dot-4-security-release/
+    cp ${./reset_token.rake} $out/share/gitlab/lib/tasks/reset_token.rake
   '';
+
   passthru = {
-    inherit env;
-    inherit ruby;
+    inherit rubyEnv;
+    ruby = rubyEnv.wrappedRuby;
+    GITALY_SERVER_VERSION = data.passthru.GITALY_SERVER_VERSION;
+    GITLAB_PAGES_VERSION = data.passthru.GITLAB_PAGES_VERSION;
+    GITLAB_SHELL_VERSION = data.passthru.GITLAB_SHELL_VERSION;
+    GITLAB_WORKHORSE_VERSION = data.passthru.GITLAB_WORKHORSE_VERSION;
   };
+
+  meta = with lib; {
+    homepage = http://www.gitlab.com/;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ fpletz globin krav ];
+  } // (if gitlabEnterprise then
+    {
+      license = licenses.unfreeRedistributable; # https://gitlab.com/gitlab-org/gitlab-ee/raw/master/LICENSE
+      description = "GitLab Enterprise Edition";
+    }
+  else
+    {
+      license = licenses.mit;
+      description = "GitLab Community Edition";
+      longDescription = "GitLab Community Edition (CE) is an open source end-to-end software development platform with built-in version control, issue tracking, code review, CI/CD, and more. Self-host GitLab CE on your own servers, in a container, or on a cloud provider.";
+    });
 }

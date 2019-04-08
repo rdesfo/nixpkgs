@@ -11,8 +11,10 @@ let
 
   nagiosObjectDefs = cfg.objectDefs;
 
-  nagiosObjectDefsDir = pkgs.runCommand "nagios-objects" {inherit nagiosObjectDefs;}
-    "mkdir -p $out; ln -s $nagiosObjectDefs $out/";
+  nagiosObjectDefsDir = pkgs.runCommand "nagios-objects" {
+      inherit nagiosObjectDefs;
+      preferLocalBuild = true;
+    } "mkdir -p $out; ln -s $nagiosObjectDefs $out/";
 
   nagiosCfgFile = pkgs.writeText "nagios.cfg"
     ''
@@ -22,7 +24,7 @@ let
       status_file=${nagiosState}/status.dat
       object_cache_file=${nagiosState}/objects.cache
       temp_file=${nagiosState}/nagios.tmp
-      lock_file=/var/run/nagios.lock # Not used I think.
+      lock_file=/run/nagios.lock # Not used I think.
       state_retention_file=${nagiosState}/retention.dat
       query_socket=${nagiosState}/nagios.qh
       check_result_path=${nagiosState}
@@ -94,7 +96,9 @@ in
       };
 
       plugins = mkOption {
+        type = types.listOf types.package;
         default = [pkgs.nagiosPluginsOfficial pkgs.ssmtp];
+        defaultText = "[pkgs.nagiosPluginsOfficial pkgs.ssmtp]";
         description = "
           Packages to be added to the Nagios <envar>PATH</envar>.
           Typically used to add plugins, but can be anything.
@@ -102,14 +106,18 @@ in
       };
 
       mainConfigFile = mkOption {
+        type = types.package;
         default = nagiosCfgFile;
+        defaultText = "nagiosCfgFile";
         description = "
           Derivation for the main configuration file of Nagios.
         ";
       };
 
       cgiConfigFile = mkOption {
+        type = types.package;
         default = nagiosCGICfgFile;
+        defaultText = "nagiosCGICfgFile";
         description = "
           Derivation for the configuration file of Nagios CGI scripts
           that can be used in web servers for running the Nagios web interface.
@@ -137,7 +145,7 @@ in
 
 
   config = mkIf cfg.enable {
-    users.extraUsers.nagios = {
+    users.users.nagios = {
       description = "Nagios user ";
       uid         = config.ids.uids.nagios;
       home        = nagiosState;
@@ -157,7 +165,7 @@ in
       description = "Nagios monitoring daemon";
       path     = [ pkgs.nagios ];
       wantedBy = [ "multi-user.target" ];
-      after    = [ "network-interfaces.target" ];
+      after    = [ "network.target" ];
 
       serviceConfig = {
         User = "nagios";

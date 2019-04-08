@@ -1,37 +1,28 @@
-{ stdenv, fetchurl, pkgconfig, gtk, gettext, withBuildColors ? true, ncurses ? null}:
+{ stdenv, fetchurl, meson, ninja, pkgconfig, glib, gtk, gettext, libiconv, libintl
+}:
 
-assert withBuildColors -> ncurses != null;
-
-with stdenv.lib;
 stdenv.mkDerivation rec {
   name = "girara-${version}";
-  version = "0.2.3";
+  version = "0.3.2";
 
   src = fetchurl {
-    url = "http://pwmt.org/projects/girara/download/${name}.tar.gz";
-    sha256 = "1phfmqp8y17zcy9yi6pm2f80x8ldbk60iswpm4bmjz5217jwqzxh";
+    url = "https://pwmt.org/projects/girara/download/${name}.tar.xz";
+    sha256 = "1kc6n1mxjxa7wvwnqy94qfg8l9jvx9qrvrr2kc7m4g0z20x3a00p";
   };
 
-  preConfigure = ''
-    sed -i 's/ifdef TPUT_AVAILABLE/ifneq ($(TPUT_AVAILABLE), 0)/' colors.mk
-  '';
+  nativeBuildInputs = [ meson ninja pkgconfig gettext ];
+  buildInputs = [ libintl libiconv ];
+  propagatedBuildInputs = [ glib gtk ];
 
-  buildInputs = [ pkgconfig gtk gettext ];
-
-  makeFlags = [ "PREFIX=$(out)" ]
-    ++ optional withBuildColors "TPUT=${ncurses}/bin/tput"
-    ++ optional (!withBuildColors) "TPUT_AVAILABLE=0"
-    ;
-
-  meta = {
-    homepage = http://pwmt.org/projects/girara/;
+  meta = with stdenv.lib; {
+    homepage = https://pwmt.org/projects/girara/;
     description = "User interface library";
     longDescription = ''
       girara is a library that implements a GTK+ based VIM-like user interface
       that focuses on simplicity and minimalism.
     '';
     license = licenses.zlib;
-    platforms = platforms.linux;
+    platforms = platforms.linux ++ platforms.darwin;
     maintainers = [ maintainers.garbas ];
   };
 }

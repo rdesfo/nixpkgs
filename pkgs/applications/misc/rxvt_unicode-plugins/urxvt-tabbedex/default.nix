@@ -1,21 +1,23 @@
-{ stdenv, fetchgit }:
+{ stdenv, fetchFromGitHub, perl }:
 
 stdenv.mkDerivation {
-  name = "urxvt-tabbedex";
+  name = "urxvt-tabbedex-2016-08-17";
 
-  src = fetchgit {
-    url = "https://github.com/mina86/urxvt-tabbedex";
-    rev = "54c8d6beb4d65278ed6db24693ca56e1ee65bb42";
-    sha256 = "f8734ee289e1cfc517d0699627191c98d32ae3549e0f1935af2a5ccb86d4dc1e";
+  src = fetchFromGitHub {
+    owner = "mina86";
+    repo = "urxvt-tabbedex";
+    rev = "089d0cb724eeb62fa8a5dfcb00ced7761e794149";
+    sha256 = "0a5jrb7ryafj55fgi8fhpy3gmb1xh5j7pbn8p5j5k6s2fnh0g0hq";
   };
 
-  installPhase = ''
-    install -D tabbedex $out/lib/urxvt/perl/tabbedex
-  '';
+  nativeBuildInputs = [ perl ];
+
+  installFlags = [ "PREFIX=$(out)" ];
 
   meta = with stdenv.lib; {
     description = "Tabbed plugin for rxvt-unicode with many enhancements (mina86's fork)";
-    homepage = "https://github.com/mina86/urxvt-tabbedex";
-    maintainers = maintainers.abbradar;
+    homepage = https://github.com/mina86/urxvt-tabbedex;
+    maintainers = with maintainers; [ abbradar ];
+    platforms = with platforms; unix;
   };
 }

@@ -1,12 +1,11 @@
-{ stdenv, fetchurl, ncurses, coreutils, pcre }:
+{ stdenv, fetchurl, ncurses, pcre, fetchpatch }:
 
 let
-
-  version = "5.0.7";
+  version = "5.7.1";
 
   documentation = fetchurl {
-    url = "mirror://sourceforge/zsh/zsh-${version}-doc.tar.bz2";
-    sha256 = "1wgw16r7z6k3mbr94mwfc8f13yc4ds2d9qk41hvsiv6rm5dnds23";
+    url = "mirror://sourceforge/zsh/zsh-${version}-doc.tar.xz";
+    sha256 = "1d1r88n1gfdavx4zy3svl1gljrvzim17jb2r834hafg2a016flrh";
   };
 
 in
@@ -15,20 +14,30 @@ stdenv.mkDerivation {
   name = "zsh-${version}";
 
   src = fetchurl {
-    url = "mirror://sourceforge/zsh/zsh-${version}.tar.bz2";
-    sha256 = "1cq4cz7ngvmbg399dva3g6njcz5d92gprmyi2swqc0klh7g2fkjl";
+    url = "mirror://sourceforge/zsh/zsh-${version}.tar.xz";
+    sha256 = "1s3yww0mzgvpc48kp0x868mm3gbna42sbgzya0nknj0x5hn2jq3j";
   };
 
-  buildInputs = [ ncurses coreutils pcre ];
+  buildInputs = [ ncurses pcre ];
 
-  preConfigure = ''
-    configureFlags="--enable-maildir-support --enable-multibyte --enable-zprofile=$out/etc/zprofile --with-tcsetpgrp --enable-pcre"
-  '';
+  configureFlags = [
+    "--enable-maildir-support"
+    "--enable-multibyte"
+    "--with-tcsetpgrp"
+    "--enable-pcre"
+    "--enable-zprofile=${placeholder "out"}/etc/zprofile"
+  ];
+
+  # the zsh/zpty module is not available on hydra
+  # so skip groups Y Z
+  checkFlags = map (T: "TESTNUM=${T}") (stdenv.lib.stringToCharacters "ABCDEVW");
 
   # XXX: think/discuss about this, also with respect to nixos vs nix-on-X
   postInstall = ''
-    mkdir -p $out/share/
+    mkdir -p $out/share/info
     tar xf ${documentation} -C $out/share
+    ln -s $out/share/zsh-*/Doc/zsh.info* $out/share/info/
+
     mkdir -p $out/etc/
     cat > $out/etc/zprofile <<EOF
 if test -e /etc/NIXOS; then
@@ -68,8 +77,12 @@ EOF
       a host of other features.
     '';
     license = "MIT-like";
-    homePage = "http://www.zsh.org/";
-    maintainers = with stdenv.lib.maintainers; [ chaoflow ];
+    homepage = http://www.zsh.org/;
+    maintainers = with stdenv.lib.maintainers; [ pSub ];
     platforms = stdenv.lib.platforms.unix;
+  };
+
+  passthru = {
+    shellPath = "/bin/zsh";
   };
 }

@@ -1,33 +1,28 @@
-{ stdenv, fetchurl, makeDesktopItem, qt4 }:
+{ stdenv, fetchurl, makeDesktopItem, ffmpeg
+, qmake, qttools
+, qtbase, qtdeclarative, qtlocation, qtquickcontrols2, qtwebchannel, qtwebengine
+}:
 
-let version = "3.4.9"; in
 stdenv.mkDerivation rec {
   name = "clipgrab-${version}";
+  version = "3.8.2";
 
   src = fetchurl {
-    sha256 = "0valq3cgx7yz11zcscz1vdjmppwbicvg0id61dcar22pyp2zkap1";
-    url = "http://download.clipgrab.de/${name}.tar.bz2";
+    sha256 = "0dhiv1mldp5f555im6mkjxdh6iivn1hnx2xdaqa6wxzsrwrvv5dd";
+    # The .tar.bz2 "Download" link is a binary blob, the source is the .tar.gz!
+    url = "https://download.clipgrab.org/${name}.tar.gz";
   };
 
-  meta = with stdenv.lib; {
-    inherit version;
-    description = "Video downloader for YouTube and other sites";
-    longDescription = ''
-      ClipGrab is a free downloader and converter for YouTube, Vimeo, Metacafe,
-      Dailymotion and many other online video sites. It converts downloaded
-      videos to MPEG4, MP3 or other formats in just one easy step.
-    '';
-    homepage = http://clipgrab.org/;
-    license = with licenses; gpl3Plus;
-    platforms = with platforms; linux;
-    maintainers = with maintainers; [ nckx ];
-  };
+  buildInputs = [ ffmpeg qtbase qtdeclarative qtlocation qtquickcontrols2 qtwebchannel qtwebengine ];
+  nativeBuildInputs = [ qmake qttools ];
 
-  buildInputs = [ qt4 ];
-
-  configurePhase = ''
-    qmake clipgrab.pro
+  postPatch = stdenv.lib.optionalString (ffmpeg != null) ''
+  substituteInPlace converter_ffmpeg.cpp \
+    --replace '"ffmpeg"' '"${ffmpeg.bin}/bin/ffmpeg"' \
+    --replace '"ffmpeg ' '"${ffmpeg.bin}/bin/ffmpeg '
   '';
+
+  qmakeFlags = [ "clipgrab.pro" ];
 
   enableParallelBuilding = true;
 
@@ -36,7 +31,7 @@ stdenv.mkDerivation rec {
     exec = name;
     icon = name;
     desktopName = "ClipGrab";
-    comment = "A friendly downloader for YouTube and other sites";
+    comment = meta.description;
     genericName = "Web video downloader";
     categories = "Qt;AudioVideo;Audio;Video";
   };
@@ -46,4 +41,16 @@ stdenv.mkDerivation rec {
     install -Dm644 icon.png $out/share/pixmaps/clipgrab.png
     cp -r ${desktopItem}/share/applications $out/share
   '';
+
+  meta = with stdenv.lib; {
+    description = "Video downloader for YouTube and other sites";
+    longDescription = ''
+      ClipGrab is a free downloader and converter for YouTube, Vimeo, Metacafe,
+      Dailymotion and many other online video sites. It converts downloaded
+      videos to MPEG4, MP3 or other formats in just one easy step.
+    '';
+    homepage = https://clipgrab.org/;
+    license = licenses.gpl3Plus;
+    platforms = platforms.linux;
+  };
 }

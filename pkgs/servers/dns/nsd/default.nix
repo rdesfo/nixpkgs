@@ -1,4 +1,4 @@
-{ config, stdenv, fetchurl, libevent, openssl
+{ stdenv, fetchurl, libevent, openssl
 , bind8Stats       ? false
 , checking         ? false
 , ipv6             ? true
@@ -10,15 +10,21 @@
 , rootServer       ? false
 , rrtypes          ? false
 , zoneStats        ? false
+
+, configFile ? "etc/nsd/nsd.conf"
 }:
 
 stdenv.mkDerivation rec {
-  name = "nsd-4.1.1";
+  name = "nsd-4.1.27";
 
   src = fetchurl {
-    url = "http://www.nlnetlabs.nl/downloads/nsd/${name}.tar.gz";
-    sha256 = "b0c3fab40ac7a8b5ffca642bc9e1b424aa72aebd03adf13a1f24ab4874734640";
+    url = "https://www.nlnetlabs.nl/downloads/nsd/${name}.tar.gz";
+    sha256 = "1sjfbwr4vq25304hr9vmd9j821g2vzv8lpy95hpsravc80q5zaqv";
   };
+
+  prePatch = ''
+    substituteInPlace nsd-control-setup.sh.in --replace openssl ${openssl}/bin/openssl
+  '';
 
   buildInputs = [ libevent openssl ];
 
@@ -35,13 +41,20 @@ stdenv.mkDerivation rec {
      ++ edf rootServer       "root-server"
      ++ edf rrtypes          "draft-rrtypes"
      ++ edf zoneStats        "zone-stats"
-     ++ [ "--with-ssl=${openssl}" "--with-libevent=${libevent}" ];
+     ++ [ "--with-ssl=${openssl.dev}"
+          "--with-libevent=${libevent.dev}"
+          "--with-nsd_conf_file=${configFile}"
+          "--with-configdir=etc/nsd"
+        ];
+
+  patchPhase = ''
+    sed 's@$(INSTALL_DATA) nsd.conf.sample $(DESTDIR)$(nsdconfigfile).sample@@g' -i Makefile.in
+  '';
 
   meta = with stdenv.lib; {
     homepage = http://www.nlnetlabs.nl;
     description = "Authoritative only, high performance, simple and open source name server";
     license = licenses.bsd3;
-
     platforms = platforms.unix;
     maintainers = [ maintainers.hrdinka ];
   };

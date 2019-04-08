@@ -1,22 +1,28 @@
 { stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name = "man-pages-3.82";
+  name = "man-pages-${version}";
+  version = "5.00";
 
   src = fetchurl {
     url = "mirror://kernel/linux/docs/man-pages/${name}.tar.xz";
-    sha256 = "1c8q618shf469nfp55qrwjv9630fgq5abfk946xya9hw1bfp6wjl";
+    sha256 = "006rcqhs4ay9q8wip2kbgk3065gwvfbzrqgv2dsydwvcnwv50bss";
   };
 
-  preBuild =
-    ''
-      makeFlagsArray=(MANDIR=$out/share/man)
-    '';
+  makeFlags = [ "MANDIR=$(out)/share/man" ];
+  postInstall = ''
+    # conflict with shadow-utils
+    rm $out/share/man/man5/passwd.5 \
+       $out/share/man/man3/getspnam.3
+  '';
+  outputDocdev = "out";
 
   meta = with stdenv.lib; {
     description = "Linux development manual pages";
-    homepage = http://www.kernel.org/doc/man-pages/;
+    homepage = https://www.kernel.org/doc/man-pages/;
     repositories.git = http://git.kernel.org/pub/scm/docs/man-pages/man-pages;
-    maintainers = with maintainers; [ nckx ];
+    license = licenses.gpl2Plus;
+    platforms = with platforms; unix;
+    priority = 30; # if a package comes with its own man page, prefer it
   };
 }
